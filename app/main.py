@@ -1,6 +1,9 @@
 from fastapi import FastAPI
 
+from app.api.routes.checkins import router as checkins_router
 from app.api.routes.health import router as health_router
+from app.api.routes.journals import router as journals_router
+from app.api.routes.users import router as users_router
 
 app = FastAPI(
     title="Miru API",
@@ -9,3 +12,6 @@ app = FastAPI(
 )
 
 app.include_router(health_router, prefix="/health", tags=["Health"])
+app.include_router(users_router, prefix="/users", tags=["Users"])
+app.include_router(journals_router, prefix="/journals", tags=["Journals"])
+app.include_router(checkins_router, prefix="/checkins", tags=["Structured Check-ins"])
