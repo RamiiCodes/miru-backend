@@ -10,9 +10,12 @@ from app.db.repositories.checkin_repository import (
     create_structured_checkin,
     get_structured_checkin_by_id,
 )
-from app.db.repositories.user_repository import get_user_by_id
+
 from app.db.session import get_db
 from app.schemas.checkin import StructuredCheckinCreate, StructuredCheckinRead
+
+from app.api.deps import get_current_user
+from app.db.models.user import User
 
 router = APIRouter()
 
@@ -20,19 +23,12 @@ router = APIRouter()
 @router.post("", response_model=StructuredCheckinRead, status_code=status.HTTP_201_CREATED)
 def create_structured_checkin_endpoint(
     payload: StructuredCheckinCreate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    user = get_user_by_id(db, payload.user_id)
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found.",
-        )
-
     checkin = create_structured_checkin(
         db=db,
-        user_id=payload.user_id,
+        user_id=current_user.id,
         mood_score=payload.mood_score,
         stress_score=payload.stress_score,
         energy_score=payload.energy_score,
@@ -41,7 +37,9 @@ def create_structured_checkin_endpoint(
     )
 
     create_user_signals_from_checkin(db=db, checkin=checkin)
-    calculate_current_emotional_state(db=db, user_id=checkin.user_id)
+
+    calculate_current_emotional_state(db=db, user_id=current_user.id)
+
     return checkin
 
 @router.get("/{checkin_id}", response_model=StructuredCheckinRead)

@@ -5,7 +5,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class StructuredCheckinCreate(BaseModel):
-    user_id: UUID
     mood_score: int = Field(ge=0, le=10)
     stress_score: int = Field(ge=0, le=10)
     energy_score: int = Field(ge=0, le=10)
