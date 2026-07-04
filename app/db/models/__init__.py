@@ -4,6 +4,7 @@ from app.db.models.signal_catalog import SignalCatalog
 from app.db.models.structured_checkin import StructuredCheckin
 from app.db.models.user import User
 from app.db.models.user_signal import UserSignal
+from app.db.models.basic_insight import BasicInsight
 
 __all__ = [
     "User",
@@ -12,4 +13,5 @@ __all__ = [
     "SignalCatalog",
     "UserSignal",
     "CurrentEmotionalState",
+    "BasicInsight",
 ]
