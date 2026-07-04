@@ -53,10 +53,29 @@ def create_user_signal(
 def list_user_signals_by_user_id(
     db: Session,
     user_id: UUID,
-) -> list[UserSignal]:
-    return (
+) -> list[dict]:
+    rows = (
         db.query(UserSignal)
+        .join(UserSignal.signal)
         .filter(UserSignal.user_id == user_id)
         .order_by(UserSignal.recorded_at.desc())
         .all()
     )
+
+    return [
+        {
+            "id": user_signal.id,
+            "user_id": user_signal.user_id,
+            "signal_id": user_signal.signal_id,
+            "signal_code": user_signal.signal.code,
+            "signal_name": user_signal.signal.name,
+            "signal_domain": user_signal.signal.domain,
+            "value": user_signal.value,
+            "confidence": user_signal.confidence,
+            "source_type": user_signal.source_type,
+            "source_id": user_signal.source_id,
+            "recorded_at": user_signal.recorded_at,
+            "created_at": user_signal.created_at,
+        }
+        for user_signal in rows
+    ]

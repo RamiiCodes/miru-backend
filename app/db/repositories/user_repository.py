@@ -21,3 +21,19 @@ def create_user(db: Session, email: str) -> User:
     db.refresh(user)
 
     return user
+
+def create_user_with_password(
+    db: Session,
+    email: str,
+    password_hash: str,
+) -> User:
+    user = User(
+        email=email,
+        password_hash=password_hash,
+    )
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return user
