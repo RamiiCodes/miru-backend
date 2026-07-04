@@ -115,11 +115,45 @@ class KeywordJournalAnalyzer:
     ) -> list[str]:
         normalized_content = content.lower()
 
-        return [
-            keyword
-            for keyword in keywords
-            if keyword in normalized_content
-        ]
+        matched_keywords: list[str] = []
+        occupied_spans: list[tuple[int, int]] = []
+
+        # Longer keywords first prevents double-counting nested phrases like:
+        # "i am not good enough" and "not good enough".
+        sorted_keywords = sorted(
+            set(keywords),
+            key=len,
+            reverse=True,
+        )
+
+        for keyword in sorted_keywords:
+            normalized_keyword = keyword.lower()
+            search_start = 0
+
+            while True:
+                match_start = normalized_content.find(
+                    normalized_keyword,
+                    search_start,
+                )
+
+                if match_start == -1:
+                    break
+
+                match_end = match_start + len(normalized_keyword)
+
+                overlaps_existing_match = any(
+                    match_start < existing_end and match_end > existing_start
+                    for existing_start, existing_end in occupied_spans
+                )
+
+                if not overlaps_existing_match:
+                    matched_keywords.append(keyword)
+                    occupied_spans.append((match_start, match_end))
+                    break
+
+                search_start = match_end
+
+        return matched_keywords
 
     def _calculate_signal_value(
         self,

@@ -15,6 +15,8 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
     )
     journal_analyzer_provider: str = "keyword"
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3.2:1b"
 
 
 settings = Settings()
