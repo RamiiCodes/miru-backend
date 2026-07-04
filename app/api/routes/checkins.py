@@ -2,6 +2,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from app.services.checkin_signal_service import create_user_signals_from_checkin
+
+from app.services.current_emotional_state_service import calculate_current_emotional_state
 
 from app.db.repositories.checkin_repository import (
     create_structured_checkin,
@@ -27,7 +30,7 @@ def create_structured_checkin_endpoint(
             detail="User not found.",
         )
 
-    return create_structured_checkin(
+    checkin = create_structured_checkin(
         db=db,
         user_id=payload.user_id,
         mood_score=payload.mood_score,
@@ -37,6 +40,9 @@ def create_structured_checkin_endpoint(
         social_score=payload.social_score,
     )
 
+    create_user_signals_from_checkin(db=db, checkin=checkin)
+    calculate_current_emotional_state(db=db, user_id=checkin.user_id)
+    return checkin
 
 @router.get("/{checkin_id}", response_model=StructuredCheckinRead)
 def get_structured_checkin_endpoint(

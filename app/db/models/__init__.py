@@ -1,3 +1,4 @@
+from app.db.models.current_emotional_state import CurrentEmotionalState
 from app.db.models.journal_entry import JournalEntry
 from app.db.models.signal_catalog import SignalCatalog
 from app.db.models.structured_checkin import StructuredCheckin
@@ -10,4 +11,5 @@ __all__ = [
     "StructuredCheckin",
     "SignalCatalog",
     "UserSignal",
+    "CurrentEmotionalState",
 ]
