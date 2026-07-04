@@ -12,6 +12,7 @@ os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["JWT_SECRET_KEY"] = "miru-test-secret"
 os.environ["JWT_ALGORITHM"] = "HS256"
 os.environ["ACCESS_TOKEN_EXPIRE_MINUTES"] = "60"
+os.environ["JOURNAL_ANALYZER_PROVIDER"] = "keyword"
 
 from app.db import models  # noqa: E402, F401
 from app.db.base import Base  # noqa: E402

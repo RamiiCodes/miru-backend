@@ -6,7 +6,6 @@ from app.db.models.user import User
 from app.db.repositories.journal_repository import create_journal_entry
 from app.db.session import get_db
 from app.schemas.journal import JournalEntryCreate, JournalEntryRead
-
 from app.services.current_emotional_state_service import calculate_current_emotional_state
 from app.services.journal_signal_service import create_user_signals_from_journal
 

@@ -1,6 +1,10 @@
+import time
+
 from sqlalchemy.orm import Session
 
+from app.ai.journal_analyzer_factory import get_journal_analyzer
 from app.db.models.journal_entry import JournalEntry
+from app.db.repositories.llm_run_repository import create_llm_run
 from app.db.repositories.signal_catalog_repository import get_signal_by_code
 from app.db.repositories.user_signal_repository import (
     create_user_signal,
@@ -8,102 +12,64 @@ from app.db.repositories.user_signal_repository import (
 )
 
 
-JOURNAL_SIGNAL_KEYWORDS = {
-    "rumination_tendency": [
-        "overthinking",
-        "can't stop thinking",
-        "cannot stop thinking",
-        "thinking again and again",
-        "loop",
-        "ruminating",
-        "obsessed",
-        "stuck in my head",
-        "je pense trop",
-        "je n'arrête pas de penser",
-        "boucle",
-    ],
-    "self_criticism": [
-        "i am stupid",
-        "i'm stupid",
-        "i am useless",
-        "i'm useless",
-        "i hate myself",
-        "my fault",
-        "i'm not good enough",
-        "i am not good enough",
-        "je suis nul",
-        "je suis inutile",
-        "c'est ma faute",
-    ],
-    "fear_of_failure": [
-        "failed",
-        "failure",
-        "i will fail",
-        "afraid to fail",
-        "scared to fail",
-        "not capable",
-        "i can't do it",
-        "je vais échouer",
-        "peur d'échouer",
-        "échec",
-    ],
-    "work_sensitivity": [
-        "work",
-        "job",
-        "manager",
-        "colleague",
-        "meeting",
-        "deadline",
-        "project",
-        "travail",
-        "boulot",
-        "chef",
-        "collègue",
-        "réunion",
-        "deadline",
-        "projet",
-    ],
-}
-
-
-def _calculate_signal_value(content: str, keywords: list[str]) -> float:
-    normalized_content = content.lower()
-
-    matches = 0
-
-    for keyword in keywords:
-        if keyword in normalized_content:
-            matches += 1
-
-    if matches == 0:
-        return 0.0
-
-    if matches == 1:
-        return 0.4
-
-    if matches == 2:
-        return 0.7
-
-    return 0.9
-
-
 def create_user_signals_from_journal(
     db: Session,
     journal_entry: JournalEntry,
 ) -> None:
-    for signal_code, keywords in JOURNAL_SIGNAL_KEYWORDS.items():
-        value = _calculate_signal_value(
-            content=journal_entry.content,
-            keywords=keywords,
+    analyzer = get_journal_analyzer()
+
+    started_at = time.perf_counter()
+
+    try:
+        analysis_result = analyzer.analyze(journal_entry.content)
+
+        latency_ms = int((time.perf_counter() - started_at) * 1000)
+
+        create_llm_run(
+            db=db,
+            user_id=journal_entry.user_id,
+            source_type="journal_entry",
+            source_id=journal_entry.id,
+            provider=analysis_result.provider,
+            model_name=analysis_result.model_name,
+            prompt_version=analysis_result.prompt_version,
+            input_text=journal_entry.content,
+            output_json=analysis_result.model_dump(mode="json"),
+            status="success",
+            error_message=None,
+            latency_ms=latency_ms,
         )
 
-        if value == 0.0:
-            continue
+    except Exception as exc:
+        latency_ms = int((time.perf_counter() - started_at) * 1000)
 
-        signal = get_signal_by_code(db=db, code=signal_code)
+        create_llm_run(
+            db=db,
+            user_id=journal_entry.user_id,
+            source_type="journal_entry",
+            source_id=journal_entry.id,
+            provider=analyzer.provider,
+            model_name=analyzer.model_name,
+            prompt_version=analyzer.prompt_version,
+            input_text=journal_entry.content,
+            output_json=None,
+            status="failed",
+            error_message=str(exc),
+            latency_ms=latency_ms,
+        )
+
+        raise
+
+    for detected_signal in analysis_result.detected_signals:
+        signal = get_signal_by_code(
+            db=db,
+            code=detected_signal.signal_code,
+        )
 
         if signal is None:
-            raise ValueError(f"Signal not found in catalog: {signal_code}")
+            raise ValueError(
+                f"Signal not found in catalog: {detected_signal.signal_code}"
+            )
 
         existing_signal = get_user_signal_by_source(
             db=db,
@@ -119,8 +85,8 @@ def create_user_signals_from_journal(
             db=db,
             user_id=journal_entry.user_id,
             signal_id=signal.id,
-            value=value,
-            confidence=0.55,
+            value=detected_signal.value,
+            confidence=detected_signal.confidence,
             source_type="journal_entry",
             source_id=journal_entry.id,
             recorded_at=journal_entry.created_at,
