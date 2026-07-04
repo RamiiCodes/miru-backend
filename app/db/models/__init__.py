@@ -5,7 +5,7 @@ from app.db.models.structured_checkin import StructuredCheckin
 from app.db.models.user import User
 from app.db.models.user_signal import UserSignal
 from app.db.models.basic_insight import BasicInsight
-
+from app.db.models.llm_run import LLMRun
 __all__ = [
     "User",
     "JournalEntry",
@@ -14,4 +14,5 @@ __all__ = [
     "UserSignal",
     "CurrentEmotionalState",
     "BasicInsight",
+    "LLMRun",
 ]

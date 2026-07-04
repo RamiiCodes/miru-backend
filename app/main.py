@@ -8,7 +8,7 @@ from app.api.routes.user_signals import router as user_signals_router
 from app.api.routes.current_emotional_state import router as current_state_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.basic_insights import router as basic_insights_router
-
+from app.api.routes.llm_runs import router as llm_runs_router
 
 app = FastAPI(
     title="Miru API",
@@ -24,3 +24,4 @@ app.include_router(checkins_router, prefix="/checkins", tags=["Structured Check-
 app.include_router(user_signals_router, prefix="/signals", tags=["UserSignals"])
 app.include_router(current_state_router, prefix="/state", tags=["Current Emotional State"])
 app.include_router(basic_insights_router, prefix="/insights", tags=["Basic Insights"])
+app.include_router(llm_runs_router, prefix="/llm-runs", tags=["LLM Runs"])
