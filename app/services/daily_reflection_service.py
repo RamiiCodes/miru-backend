@@ -91,13 +91,13 @@ def generate_daily_reflection_for_user(
     latest_patterns = patterns[:5]
 
     sorted_actions = sorted(
-    actions,
-    key=lambda action: (
-        PRIORITY_ORDER.get(action.priority, 0),
-        action.created_at,
-    ),
-    reverse=True,
-)
+        actions,
+        key=lambda action: (
+            PRIORITY_ORDER.get(action.priority, 0),
+            action.created_at,
+        ),
+        reverse=True,
+    )
 
     unique_actions = []
     seen_action_codes = set()

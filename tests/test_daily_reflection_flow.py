@@ -1,3 +1,10 @@
+import uuid
+
+from app.db.models.daily_reflection import DailyReflection
+from app.db.repositories.action_suggestion_repository import create_action_suggestion
+from app.db.repositories.user_repository import get_user_by_email
+
+
 def _auth_headers(client, email: str = "daily-reflection@example.com") -> dict[str, str]:
     response = client.post(
         "/auth/register",
@@ -47,6 +54,23 @@ def _create_journal(client, headers: dict[str, str]) -> None:
     assert response.status_code == 201
 
 
+def _create_duplicate_action_suggestions(db_session, *, user_id) -> None:
+    for source_id in [uuid.uuid4(), uuid.uuid4()]:
+        create_action_suggestion(
+            db=db_session,
+            user_id=user_id,
+            action_code="short_stress_pause",
+            title="Take a short stress pause",
+            description="Pause briefly and notice body tension.",
+            action_type="grounding",
+            priority="high",
+            reason="Regression test duplicate action candidate.",
+            source_type="test_source",
+            source_id=source_id,
+            confidence=0.7,
+        )
+
+
 def test_generate_daily_reflection_from_existing_state_insights_and_actions(client):
     headers = _auth_headers(client)
 
@@ -84,7 +108,10 @@ def test_generate_daily_reflection_from_existing_state_insights_and_actions(clie
     assert reflection["insight_summary"]
     assert reflection["pattern_summary"]
     assert reflection["action_summary"]
-    assert "Take a short stress pause. Other options include: Take a short stress pause" not in reflection["action_summary"]
+    assert (
+        "Take a short stress pause. Other options include: Take a short stress pause"
+        not in reflection["action_summary"]
+    )
     assert reflection["action_summary"].count("Take a short stress pause") <= 1
 
     assert "stress" in reflection["focus_areas"]
@@ -94,6 +121,100 @@ def test_generate_daily_reflection_from_existing_state_insights_and_actions(clie
     assert len(reflection["source_snapshot_json"]["action_ids"]) >= 1
 
     assert reflection["model_version"] == "daily_reflection_v0_1"
+
+
+def test_daily_reflection_action_summary_does_not_duplicate_same_action(
+    client,
+    db_session,
+):
+    headers = _auth_headers(client, email="no-duplicate-summary@example.com")
+    user = get_user_by_email(db=db_session, email="no-duplicate-summary@example.com")
+
+    _create_checkin(client, headers)
+    _create_duplicate_action_suggestions(db_session, user_id=user.id)
+
+    reflection_response = client.post(
+        "/daily-reflections/generate",
+        headers=headers,
+    )
+
+    assert reflection_response.status_code == 200
+
+    reflection = reflection_response.json()
+
+    assert reflection["action_summary"].count("Take a short stress pause") == 1
+    assert (
+        "Take a short stress pause. Other options include: Take a short stress pause"
+        not in reflection["action_summary"]
+    )
+
+
+def test_daily_reflection_output_does_not_repeat_same_action(
+    client,
+    db_session,
+):
+    headers = _auth_headers(client, email="no-repeated-action-output@example.com")
+    user = get_user_by_email(
+        db=db_session,
+        email="no-repeated-action-output@example.com",
+    )
+
+    _create_checkin(client, headers)
+    _create_duplicate_action_suggestions(db_session, user_id=user.id)
+
+    reflection_response = client.post(
+        "/daily-reflections/generate",
+        headers=headers,
+    )
+
+    assert reflection_response.status_code == 200
+
+    reflection = reflection_response.json()
+
+    assert len(reflection["source_snapshot_json"]["action_ids"]) == 1
+
+
+def test_same_date_reflection_generation_does_not_duplicate_db_rows(
+    client,
+    db_session,
+):
+    headers = _auth_headers(client, email="same-date-db-row@example.com")
+    user = get_user_by_email(db=db_session, email="same-date-db-row@example.com")
+
+    _create_checkin(client, headers)
+
+    first_response = client.post(
+        "/daily-reflections/generate",
+        headers=headers,
+    )
+    second_response = client.post(
+        "/daily-reflections/generate",
+        headers=headers,
+    )
+    third_response = client.post(
+        "/daily-reflections/generate",
+        headers=headers,
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert third_response.status_code == 200
+
+    assert {
+        first_response.json()["id"],
+        second_response.json()["id"],
+        third_response.json()["id"],
+    } == {
+        first_response.json()["id"],
+    }
+
+    reflection_count = (
+        db_session.query(DailyReflection)
+        .filter(DailyReflection.user_id == user.id)
+        .count()
+    )
+
+    assert reflection_count == 1
 
 
 def test_get_latest_daily_reflection(client):
