@@ -6,6 +6,8 @@ from app.db.models.user import User
 from app.db.models.user_signal import UserSignal
 from app.db.models.basic_insight import BasicInsight
 from app.db.models.llm_run import LLMRun
+from app.db.models.pattern_detection import PatternDetection
+
 __all__ = [
     "User",
     "JournalEntry",
@@ -15,4 +17,5 @@ __all__ = [
     "CurrentEmotionalState",
     "BasicInsight",
     "LLMRun",
+    "PatternDetection",
 ]
