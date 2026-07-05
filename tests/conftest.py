@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 TEST_DATABASE_URL = "postgresql+psycopg://miru:miru_password@localhost:5432/miru_test"
 
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
-os.environ["JWT_SECRET_KEY"] = "miru-test-secret"
+os.environ["JWT_SECRET_KEY"] = "miru-test-secret-with-at-least-32-bytes"
 os.environ["JWT_ALGORITHM"] = "HS256"
 os.environ["ACCESS_TOKEN_EXPIRE_MINUTES"] = "60"
 os.environ["JOURNAL_ANALYZER_PROVIDER"] = "keyword"

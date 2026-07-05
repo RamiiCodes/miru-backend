@@ -7,6 +7,7 @@ from app.db.models.user_signal import UserSignal
 from app.db.models.basic_insight import BasicInsight
 from app.db.models.llm_run import LLMRun
 from app.db.models.pattern_detection import PatternDetection
+from app.db.models.action_suggestion import ActionSuggestion
 
 __all__ = [
     "User",
@@ -18,4 +19,5 @@ __all__ = [
     "BasicInsight",
     "LLMRun",
     "PatternDetection",
+    "ActionSuggestion",
 ]

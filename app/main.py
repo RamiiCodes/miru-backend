@@ -10,6 +10,7 @@ from app.api.routes.auth import router as auth_router
 from app.api.routes.basic_insights import router as basic_insights_router
 from app.api.routes.llm_runs import router as llm_runs_router
 from app.api.routes.pattern_detections import router as pattern_detections_router
+from app.api.routes.action_suggestions import router as action_suggestions_router
 
 
 app = FastAPI(
@@ -28,3 +29,4 @@ app.include_router(current_state_router, prefix="/state", tags=["Current Emotion
 app.include_router(basic_insights_router, prefix="/insights", tags=["Basic Insights"])
 app.include_router(llm_runs_router, prefix="/llm-runs", tags=["LLM Runs"])
 app.include_router(pattern_detections_router, prefix="/pattern-detections", tags=["Pattern Detections"])
+app.include_router(action_suggestions_router, prefix="/action-suggestions", tags=["Action Suggestions"])
