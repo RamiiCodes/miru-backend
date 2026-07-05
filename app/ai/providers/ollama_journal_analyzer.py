@@ -1,6 +1,4 @@
 import json
-from signal import signal
-
 import httpx
 from pydantic import ValidationError
 
