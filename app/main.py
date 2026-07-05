@@ -11,6 +11,7 @@ from app.api.routes.basic_insights import router as basic_insights_router
 from app.api.routes.llm_runs import router as llm_runs_router
 from app.api.routes.pattern_detections import router as pattern_detections_router
 from app.api.routes.action_suggestions import router as action_suggestions_router
+from app.api.routes.daily_reflections import router as daily_reflections_router
 
 
 app = FastAPI(
@@ -30,3 +31,5 @@ app.include_router(basic_insights_router, prefix="/insights", tags=["Basic Insig
 app.include_router(llm_runs_router, prefix="/llm-runs", tags=["LLM Runs"])
 app.include_router(pattern_detections_router, prefix="/pattern-detections", tags=["Pattern Detections"])
 app.include_router(action_suggestions_router, prefix="/action-suggestions", tags=["Action Suggestions"])
+app.include_router(action_suggestions_router, prefix="/actions", tags=["Action Suggestions"])
+app.include_router(daily_reflections_router, prefix="/daily-reflections", tags=["Daily Reflections"])
