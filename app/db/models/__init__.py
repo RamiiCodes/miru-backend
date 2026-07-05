@@ -10,6 +10,7 @@ from app.db.models.pattern_detection import PatternDetection
 from app.db.models.action_suggestion import ActionSuggestion
 from app.db.models.daily_reflection import DailyReflection
 from app.db.models.user_profile import UserProfile
+from app.db.models.user_feedback import UserFeedback
 
 __all__ = [
     "User",
@@ -24,4 +25,5 @@ __all__ = [
     "ActionSuggestion",
     "DailyReflection",
     "UserProfile",
+    "UserFeedback",
 ]

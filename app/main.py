@@ -13,6 +13,7 @@ from app.api.routes.pattern_detections import router as pattern_detections_route
 from app.api.routes.action_suggestions import router as action_suggestions_router
 from app.api.routes.daily_reflections import router as daily_reflections_router
 from app.api.routes.user_profiles import router as user_profiles_router
+from app.api.routes.user_feedback import router as user_feedback_router
 
 app = FastAPI(
     title="Miru API",
@@ -23,6 +24,7 @@ app = FastAPI(
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 app.include_router(health_router, prefix="/health", tags=["Health"])
 app.include_router(users_router, prefix="/users", tags=["Users"])
+app.include_router(user_profiles_router, prefix="/profile", tags=["User Profile"])
 app.include_router(journals_router, prefix="/journals", tags=["Journals"])
 app.include_router(checkins_router, prefix="/checkins", tags=["Structured Check-ins"])
 app.include_router(user_signals_router, prefix="/signals", tags=["UserSignals"])
@@ -33,4 +35,4 @@ app.include_router(pattern_detections_router, prefix="/pattern-detections", tags
 app.include_router(action_suggestions_router, prefix="/action-suggestions", tags=["Action Suggestions"])
 app.include_router(action_suggestions_router, prefix="/actions", tags=["Action Suggestions"])
 app.include_router(daily_reflections_router, prefix="/daily-reflections", tags=["Daily Reflections"])
-app.include_router(user_profiles_router, prefix="/profile", tags=["User Profile"])
+app.include_router(user_feedback_router, prefix="/feedback", tags=["User Feedback"])
