@@ -91,12 +91,25 @@ def generate_daily_reflection_for_user(
     latest_patterns = patterns[:5]
 
     sorted_actions = sorted(
-        actions,
-        key=lambda action: PRIORITY_ORDER.get(action.priority, 0),
-        reverse=True,
-    )
+    actions,
+    key=lambda action: (
+        PRIORITY_ORDER.get(action.priority, 0),
+        action.created_at,
+    ),
+    reverse=True,
+)
 
-    top_actions = sorted_actions[:3]
+    unique_actions = []
+    seen_action_codes = set()
+
+    for action in sorted_actions:
+        if action.action_code in seen_action_codes:
+            continue
+
+        seen_action_codes.add(action.action_code)
+        unique_actions.append(action)
+
+    top_actions = unique_actions[:3]
 
     if state is None:
         emotional_state_summary = (

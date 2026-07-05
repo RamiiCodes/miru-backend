@@ -84,6 +84,8 @@ def test_generate_daily_reflection_from_existing_state_insights_and_actions(clie
     assert reflection["insight_summary"]
     assert reflection["pattern_summary"]
     assert reflection["action_summary"]
+    assert "Take a short stress pause. Other options include: Take a short stress pause" not in reflection["action_summary"]
+    assert reflection["action_summary"].count("Take a short stress pause") <= 1
 
     assert "stress" in reflection["focus_areas"]
 
