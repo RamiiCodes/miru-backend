@@ -9,6 +9,7 @@ from app.db.models.daily_reflection import DailyReflection
 from app.db.models.pattern_detection import PatternDetection
 from app.db.models.user_feedback import UserFeedback
 from app.db.repositories.user_feedback_repository import upsert_user_feedback
+from app.db.models.reflection_response import ReflectionResponse
 
 
 def _target_exists_for_user(
@@ -60,7 +61,16 @@ def _target_exists_for_user(
             .first()
             is not None
         )
-
+    if target_type == "reflection_response":
+        return (
+            db.query(ReflectionResponse)
+            .filter(
+                ReflectionResponse.id == target_id,
+                ReflectionResponse.user_id == user_id,
+            )
+            .first()
+            is not None
+        )
     return False
 
 

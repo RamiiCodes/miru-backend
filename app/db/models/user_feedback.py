@@ -19,12 +19,12 @@ class UserFeedback(Base):
             name="uq_user_feedback_user_target",
         ),
         CheckConstraint(
-            "target_type IN ('basic_insight', 'action_suggestion', 'daily_reflection', 'pattern_detection')",
-            name="ck_user_feedback_target_type",
-        ),
-        CheckConstraint(
             "rating IN ('useful', 'not_useful', 'inaccurate', 'too_direct', 'too_vague', 'not_relevant')",
             name="ck_user_feedback_rating",
+        ),
+        CheckConstraint(
+            "target_type IN ('basic_insight', 'action_suggestion', 'daily_reflection', 'pattern_detection', 'reflection_response')",
+            name="ck_user_feedback_target_type",
         ),
     )
 

@@ -11,6 +11,7 @@ from app.db.models.action_suggestion import ActionSuggestion
 from app.db.models.daily_reflection import DailyReflection
 from app.db.models.user_profile import UserProfile
 from app.db.models.user_feedback import UserFeedback
+from app.db.models.reflection_response import ReflectionResponse
 
 __all__ = [
     "User",
@@ -26,4 +27,5 @@ __all__ = [
     "DailyReflection",
     "UserProfile",
     "UserFeedback",
+    "ReflectionResponse"
 ]

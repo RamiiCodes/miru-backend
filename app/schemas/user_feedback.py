@@ -10,6 +10,7 @@ FeedbackTargetType = Literal[
     "action_suggestion",
     "daily_reflection",
     "pattern_detection",
+    "reflection_response",
 ]
 
 FeedbackRating = Literal[
