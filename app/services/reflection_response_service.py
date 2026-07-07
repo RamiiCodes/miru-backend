@@ -4,22 +4,14 @@ from sqlalchemy.orm import Session
 
 from app.db.models.action_suggestion import ActionSuggestion
 from app.db.models.reflection_response import ReflectionResponse
-from app.db.repositories.action_suggestion_repository import (
-    list_action_suggestions_by_user_id,
-)
-from app.db.repositories.basic_insight_repository import list_basic_insights_by_user_id
-from app.db.repositories.current_emotional_state_repository import (
-    get_latest_current_emotional_state,
-)
-from app.db.repositories.pattern_detection_repository import (
-    list_pattern_detections_by_user_id,
-)
+from app.db.models.user_context import UserContext
 from app.db.repositories.reflection_response_repository import (
     create_reflection_response,
 )
-from app.db.repositories.user_feedback_repository import list_user_feedback_by_user_id
-from app.db.repositories.user_profile_repository import get_user_profile_by_user_id
-from app.db.repositories.safety_event_repository import list_open_safety_events_by_user_id
+from app.helpers.reasoning_input_assembler import (
+    ReasoningInputs,
+    assemble_reasoning_inputs,
+)
 
 
 PRIORITY_ORDER = {
@@ -42,8 +34,8 @@ def _level_label(value: float | None) -> str:
     return "lower"
 
 
-def _select_tone(db: Session, user_id: UUID) -> str:
-    profile = get_user_profile_by_user_id(db=db, user_id=user_id)
+def _select_tone(reasoning_inputs: ReasoningInputs) -> str:
+    profile = reasoning_inputs.profile
 
     if profile is not None:
         tone = profile.preferred_reflection_style
@@ -51,8 +43,10 @@ def _select_tone(db: Session, user_id: UUID) -> str:
         if tone in {"balanced", "direct", "gentle", "detailed"}:
             return tone
 
-    feedback = list_user_feedback_by_user_id(db=db, user_id=user_id)
-    recent_ratings = [item.rating for item in feedback[:10]]
+    recent_ratings = [
+        feedback.rating
+        for feedback in reasoning_inputs.latest_feedback
+    ]
 
     if "too_direct" in recent_ratings:
         return "gentle"
@@ -85,7 +79,11 @@ def _select_top_action(actions: list[ActionSuggestion]) -> ActionSuggestion | No
     return sorted_actions[0]
 
 
-def _build_title(tone: str, stress_level: float | None, has_work_insight: bool) -> str:
+def _build_title(
+    tone: str,
+    stress_level: float | None,
+    has_work_insight: bool,
+) -> str:
     if has_work_insight:
         return "Reflection on work-related stress"
 
@@ -101,83 +99,49 @@ def _build_title(tone: str, stress_level: float | None, has_work_insight: bool) 
     return "Current reflection"
 
 
-def _build_message(
-    tone: str,
-    stress_level: float | None,
-    energy_level: float | None,
-    sleep_quality: float | None,
-    motivation: float | None,
-    self_esteem: float | None,
-    insight_titles: list[str],
-    pattern_titles: list[str],
-    top_action: ActionSuggestion | None,
-) -> str:
-    stress_label = _level_label(stress_level)
-    energy_label = _level_label(energy_level)
-    sleep_label = _level_label(sleep_quality)
-
-    if tone == "direct":
-        opening = "Direct reflection: Miru sees a few signals worth noticing."
-    elif tone == "gentle":
-        opening = "A gentle observation: there may be a few things worth noticing today."
-    elif tone == "detailed":
-        opening = "Detailed reflection: Miru is combining your current state, recent insights, patterns, and available actions."
-    else:
-        opening = "Miru’s current reflection: a few signals may be worth noticing."
-
-    state_sentence = (
-        f"Your stress appears {stress_label}, energy appears {energy_label}, "
-        f"and sleep quality appears {sleep_label}."
-    )
-
-    extra_state_notes = []
-
-    if motivation is not None and motivation <= 0.4:
-        extra_state_notes.append("Motivation may be lower than usual.")
-
-    if self_esteem is not None and self_esteem <= 0.4:
-        extra_state_notes.append("Self-critical signals may be affecting your self-perception.")
-
-    if insight_titles:
-        insight_sentence = "Recent insights point to: " + "; ".join(insight_titles[:3]) + "."
-    else:
-        insight_sentence = "There are no strong recent insights yet."
-
-    if pattern_titles:
-        pattern_sentence = "Recent repeated patterns include: " + "; ".join(pattern_titles[:3]) + "."
-    else:
-        pattern_sentence = "No repeated multi-day pattern is currently active."
-
-    if top_action is not None:
-        action_sentence = (
-            f"A small next step you could try: {top_action.title}. "
-            f"{top_action.description}"
-        )
-    else:
-        action_sentence = (
-            "A useful next step may simply be to add a short check-in or journal entry "
-            "so Miru can understand the current context better."
+def _build_user_context_note(user_context: UserContext | None) -> str:
+    if user_context is None:
+        return (
+            "Context note: Miru does not have your stable life context yet, so this "
+            "reflection uses only recent check-ins, journal entries, and detected patterns."
         )
 
-    safety_sentence = (
-        "This is a reflection, not a diagnosis or medical advice."
-    )
+    notes: list[str] = []
 
-    parts = [
-        opening,
-        state_sentence,
-        *extra_state_notes,
-        insight_sentence,
-        pattern_sentence,
-        action_sentence,
-        safety_sentence,
-    ]
+    if user_context.work_stress_baseline >= 7:
+        notes.append(
+            "Your usual work stress baseline is high, so work-related signals are interpreted against an already demanding baseline."
+        )
+    elif user_context.work_stress_baseline <= 3:
+        notes.append(
+            "Your usual work stress baseline is low, so elevated work stress may stand out more strongly than usual."
+        )
 
-    return " ".join(parts)
+    if user_context.family_support_score <= 3:
+        notes.append(
+            "Family support is declared as limited, so Miru should not assume family is the easiest support source."
+        )
+
+    if user_context.social_connection_score <= 3:
+        notes.append(
+            "Social connection is declared as limited, so low-social-energy moments may need gentler recommendations."
+        )
+    elif user_context.social_connection_score >= 7:
+        notes.append(
+            "Social connection is declared as relatively strong, so reaching out may be a realistic support option."
+        )
+
+    if not notes:
+        notes.append(
+            "Your declared life context is being used as background information, not as a diagnosis."
+        )
+
+    return "Context note: " + " ".join(notes)
+
 
 def _build_safety_first_message(
-        tone: str,
-        flag_types: list[str]
+    tone: str,
+    flag_types: list[str],
 ) -> str:
     if tone == "direct":
         opening = (
@@ -207,29 +171,109 @@ def _build_safety_first_message(
         "and seek real human support."
     )
 
+
+def _build_message(
+    tone: str,
+    stress_level: float | None,
+    energy_level: float | None,
+    sleep_quality: float | None,
+    motivation: float | None,
+    self_esteem: float | None,
+    insight_titles: list[str],
+    pattern_titles: list[str],
+    top_action: ActionSuggestion | None,
+    user_context_note: str,
+) -> str:
+    stress_label = _level_label(stress_level)
+    energy_label = _level_label(energy_level)
+    sleep_label = _level_label(sleep_quality)
+
+    if tone == "direct":
+        opening = "Direct reflection: Miru sees a few signals worth noticing."
+    elif tone == "gentle":
+        opening = "A gentle observation: there may be a few things worth noticing today."
+    elif tone == "detailed":
+        opening = (
+            "Detailed reflection: Miru is combining your stable context, current state, "
+            "recent insights, patterns, and available actions."
+        )
+    else:
+        opening = "Miru’s current reflection: a few signals may be worth noticing."
+
+    state_sentence = (
+        f"Your stress appears {stress_label}, energy appears {energy_label}, "
+        f"and sleep quality appears {sleep_label}."
+    )
+
+    extra_state_notes = []
+
+    if motivation is not None and motivation <= 0.4:
+        extra_state_notes.append("Motivation may be lower than usual.")
+
+    if self_esteem is not None and self_esteem <= 0.4:
+        extra_state_notes.append(
+            "Self-critical signals may be affecting your self-perception."
+        )
+
+    if insight_titles:
+        insight_sentence = "Recent insights point to: " + "; ".join(insight_titles[:3]) + "."
+    else:
+        insight_sentence = "There are no strong recent insights yet."
+
+    if pattern_titles:
+        pattern_sentence = "Recent repeated patterns include: " + "; ".join(pattern_titles[:3]) + "."
+    else:
+        pattern_sentence = "No repeated multi-day pattern is currently active."
+
+    if top_action is not None:
+        action_sentence = (
+            f"A small next step you could try: {top_action.title}. "
+            f"{top_action.description}"
+        )
+    else:
+        action_sentence = (
+            "A useful next step may simply be to add a short check-in or journal entry "
+            "so Miru can understand the current context better."
+        )
+
+    safety_sentence = "This is a reflection, not a diagnosis or medical advice."
+
+    parts = [
+        opening,
+        state_sentence,
+        user_context_note,
+        *extra_state_notes,
+        insight_sentence,
+        pattern_sentence,
+        action_sentence,
+        safety_sentence,
+    ]
+
+    return " ".join(parts)
+
+
 def generate_reflection_response_for_user(
     db: Session,
     user_id: UUID,
 ) -> ReflectionResponse:
-    state = get_latest_current_emotional_state(db=db, user_id=user_id)
-    insights = list_basic_insights_by_user_id(db=db, user_id=user_id)
-    patterns = list_pattern_detections_by_user_id(db=db, user_id=user_id)
-    actions = list_action_suggestions_by_user_id(
+    reasoning_inputs = assemble_reasoning_inputs(
         db=db,
         user_id=user_id,
-        include_completed=False,
-        include_dismissed=False,
+        insight_limit=3,
+        pattern_limit=3,
+        feedback_limit=10,
     )
 
-    tone = _select_tone(db=db, user_id=user_id)
+    state = reasoning_inputs.current_state
+    tone = _select_tone(reasoning_inputs)
 
-    open_safety_events = list_open_safety_events_by_user_id(
-        db=db,
-        user_id=user_id,
-    )
-
-    if open_safety_events:
-        flag_types = sorted({event.flag_type for event in open_safety_events})
+    if reasoning_inputs.open_safety_events:
+        flag_types = sorted(
+            {
+                event.flag_type
+                for event in reasoning_inputs.open_safety_events
+            }
+        )
 
         return create_reflection_response(
             db=db,
@@ -246,16 +290,18 @@ def generate_reflection_response_for_user(
             suggested_action_id=None,
             source_snapshot_json={
                 "safety_event_ids": [
-                    str(event.id) for event in open_safety_events
+                    str(event.id)
+                    for event in reasoning_inputs.open_safety_events
                 ],
                 "safety_flag_types": flag_types,
+                "user_context_available": reasoning_inputs.user_context is not None,
                 "tone_source": tone,
             },
         )
 
-    latest_insights = insights[:3]
-    latest_patterns = patterns[:3]
-    top_action = _select_top_action(actions)
+    latest_insights = reasoning_inputs.latest_insights
+    latest_patterns = reasoning_inputs.latest_patterns
+    top_action = _select_top_action(reasoning_inputs.active_actions)
 
     insight_titles = [insight.title for insight in latest_insights]
     pattern_titles = [pattern.title for pattern in latest_patterns]
@@ -281,6 +327,7 @@ def generate_reflection_response_for_user(
         insight_titles=insight_titles,
         pattern_titles=pattern_titles,
         top_action=top_action,
+        user_context_note=_build_user_context_note(reasoning_inputs.user_context),
     )
 
     if top_action is not None:
@@ -298,6 +345,12 @@ def generate_reflection_response_for_user(
         "insight_ids": [str(insight.id) for insight in latest_insights],
         "pattern_ids": [str(pattern.id) for pattern in latest_patterns],
         "suggested_action_id": str(top_action.id) if top_action else None,
+        "user_context_available": reasoning_inputs.user_context is not None,
+        "user_context_user_id": (
+            str(reasoning_inputs.user_context.user_id)
+            if reasoning_inputs.user_context
+            else None
+        ),
         "tone_source": tone,
     }
 

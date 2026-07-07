@@ -4,17 +4,9 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.db.models.daily_reflection import DailyReflection
-from app.db.repositories.action_suggestion_repository import (
-    list_action_suggestions_by_user_id,
-)
-from app.db.repositories.basic_insight_repository import list_basic_insights_by_user_id
-from app.db.repositories.current_emotional_state_repository import (
-    get_latest_current_emotional_state,
-)
+from app.db.models.user_context import UserContext
 from app.db.repositories.daily_reflection_repository import upsert_daily_reflection
-from app.db.repositories.pattern_detection_repository import (
-    list_pattern_detections_by_user_id,
-)
+from app.helpers.reasoning_input_assembler import assemble_reasoning_inputs
 
 
 PRIORITY_ORDER = {
@@ -71,24 +63,66 @@ def _build_focus_areas(
     return sorted(focus_areas)
 
 
+def _build_daily_user_context_summary(user_context: UserContext | None) -> str:
+    if user_context is None:
+        return (
+            "Context note: No stable life context has been added yet, so this daily "
+            "reflection is based only on recent activity."
+        )
+
+    context_parts: list[str] = []
+
+    if user_context.work_stress_baseline >= 7:
+        context_parts.append("Your declared work stress baseline is high.")
+    elif user_context.work_stress_baseline <= 3:
+        context_parts.append("Your declared work stress baseline is low.")
+
+    if user_context.family_support_score <= 3:
+        context_parts.append("Family support is declared as limited.")
+
+    if user_context.social_connection_score <= 3:
+        context_parts.append("Social connection is declared as limited.")
+    elif user_context.social_connection_score >= 7:
+        context_parts.append("Social connection is declared as relatively strong.")
+
+    if not context_parts:
+        context_parts.append("Your declared life context is being used as background.")
+
+    return "Context note: " + " ".join(context_parts)
+
+
+def _deduplicate_actions_by_code(actions):
+    unique_actions = []
+    seen_action_codes = set()
+
+    for action in actions:
+        if action.action_code in seen_action_codes:
+            continue
+
+        seen_action_codes.add(action.action_code)
+        unique_actions.append(action)
+
+    return unique_actions
+
+
 def generate_daily_reflection_for_user(
     db: Session,
     user_id: UUID,
 ) -> DailyReflection:
     today = datetime.now(timezone.utc).date()
 
-    state = get_latest_current_emotional_state(db=db, user_id=user_id)
-    insights = list_basic_insights_by_user_id(db=db, user_id=user_id)
-    patterns = list_pattern_detections_by_user_id(db=db, user_id=user_id)
-    actions = list_action_suggestions_by_user_id(
+    reasoning_inputs = assemble_reasoning_inputs(
         db=db,
         user_id=user_id,
-        include_completed=False,
-        include_dismissed=False,
+        insight_limit=5,
+        pattern_limit=5,
+        feedback_limit=10,
     )
 
-    latest_insights = insights[:5]
-    latest_patterns = patterns[:5]
+    state = reasoning_inputs.current_state
+    latest_insights = reasoning_inputs.latest_insights
+    latest_patterns = reasoning_inputs.latest_patterns
+    actions = reasoning_inputs.active_actions
 
     sorted_actions = sorted(
         actions,
@@ -99,17 +133,7 @@ def generate_daily_reflection_for_user(
         reverse=True,
     )
 
-    unique_actions = []
-    seen_action_codes = set()
-
-    for action in sorted_actions:
-        if action.action_code in seen_action_codes:
-            continue
-
-        seen_action_codes.add(action.action_code)
-        unique_actions.append(action)
-
-    top_actions = unique_actions[:3]
+    top_actions = _deduplicate_actions_by_code(sorted_actions)[:3]
 
     if state is None:
         emotional_state_summary = (
@@ -127,14 +151,16 @@ def generate_daily_reflection_for_user(
         )
 
         if state.motivation is not None and state.motivation <= 0.4:
-            emotional_state_summary += (
-                " Motivation may currently be lower than usual."
-            )
+            emotional_state_summary += " Motivation may currently be lower than usual."
 
         if state.self_esteem is not None and state.self_esteem <= 0.4:
             emotional_state_summary += (
                 " Self-critical signals may also be affecting your self-perception."
             )
+
+    user_context_summary = _build_daily_user_context_summary(
+        reasoning_inputs.user_context,
+    )
 
     if latest_insights:
         insight_titles = [insight.title for insight in latest_insights[:3]]
@@ -150,11 +176,7 @@ def generate_daily_reflection_for_user(
 
     if top_actions:
         action_titles = [action.title for action in top_actions]
-        action_summary = (
-            "A possible next step today: "
-            + action_titles[0]
-            + "."
-        )
+        action_summary = "A possible next step today: " + action_titles[0] + "."
 
         if len(action_titles) > 1:
             action_summary += (
@@ -184,6 +206,7 @@ def generate_daily_reflection_for_user(
 
     summary = (
         f"{emotional_state_summary} "
+        f"{user_context_summary} "
         f"{insight_summary} "
         f"{pattern_summary} "
         f"{action_summary}"
@@ -194,6 +217,12 @@ def generate_daily_reflection_for_user(
         "insight_ids": [str(insight.id) for insight in latest_insights],
         "pattern_ids": [str(pattern.id) for pattern in latest_patterns],
         "action_ids": [str(action.id) for action in top_actions],
+        "user_context_available": reasoning_inputs.user_context is not None,
+        "user_context_user_id": (
+            str(reasoning_inputs.user_context.user_id)
+            if reasoning_inputs.user_context
+            else None
+        ),
     }
 
     return upsert_daily_reflection(

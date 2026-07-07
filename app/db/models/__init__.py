@@ -13,6 +13,7 @@ from app.db.models.user_profile import UserProfile
 from app.db.models.user_feedback import UserFeedback
 from app.db.models.reflection_response import ReflectionResponse
 from app.db.models.safety_event import SafetyEvent
+from app.db.models.user_context import UserContext
 
 __all__ = [
     "User",
@@ -30,4 +31,5 @@ __all__ = [
     "UserFeedback",
     "ReflectionResponse",
     "SafetyEvent",
+    "UserContext",
 ]

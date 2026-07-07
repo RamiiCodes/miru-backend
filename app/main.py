@@ -16,6 +16,7 @@ from app.api.routes.user_profiles import router as user_profiles_router
 from app.api.routes.user_feedback import router as user_feedback_router
 from app.api.routes.reflection_responses import router as reflection_responses_router
 from app.api.routes.safety_events import router as safety_events_router
+from app.api.routes.user_context import router as user_context_router
 
 app = FastAPI(
     title="Miru API",
@@ -40,3 +41,4 @@ app.include_router(daily_reflections_router, prefix="/daily-reflections", tags=[
 app.include_router(user_feedback_router, prefix="/feedback", tags=["User Feedback"])
 app.include_router(reflection_responses_router, prefix="/reflection-responses", tags=["Reflection Responses"])
 app.include_router(safety_events_router, prefix="/safety-events", tags=["Safety Events"])
+app.include_router(user_context_router, prefix="/user-context", tags=["User Context"])

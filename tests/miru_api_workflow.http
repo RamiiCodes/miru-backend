@@ -1,0 +1,508 @@
+### Miru API manual workflow
+### Start the API locally first, for example:
+### .\.venv\Scripts\uvicorn.exe app.main:app --reload
+###
+### This file is written for VS Code REST Client / JetBrains HTTP Client style.
+### Run requests from top to bottom for the smoothest workflow.
+### If your client does not support {{$timestamp}} or JSONPath captures, replace
+### the variables manually from previous responses.
+
+@baseUrl = http://127.0.0.1:8000
+@email = manual-{{$timestamp}}@example.com
+@password = TestPassword123!
+
+
+### 1. Health
+
+GET {{baseUrl}}/health
+
+
+###
+GET {{baseUrl}}/health/db
+
+
+### 2. Auth
+
+# @name register
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+
+###
+@accessToken = {{register.response.body.$.access_token}}
+
+
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/x-www-form-urlencoded
+
+username={{email}}&password={{password}}
+
+
+###
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{accessToken}}
+
+
+### 3. User profile
+
+### Expected before profile creation: 404
+GET {{baseUrl}}/profile
+Authorization: Bearer {{accessToken}}
+
+
+###
+# @name upsertProfile
+PATCH {{baseUrl}}/profile
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "display_name": "Rami",
+  "birth_year": 1994,
+  "country": "France",
+  "gender": "male",
+  "living_situation": "alone",
+  "relationship_status": "single",
+  "work_status": "employed",
+  "main_life_context": ["work_stress", "self_understanding"],
+  "interests": ["technology", "fitness", "anime"],
+  "preferred_reflection_style": "direct",
+  "onboarding_completed": true
+}
+
+
+###
+GET {{baseUrl}}/profile
+Authorization: Bearer {{accessToken}}
+
+
+### 4. User context
+### User context gives reflection/daily reasoning stable background context.
+
+### Expected before context creation: 404
+GET {{baseUrl}}/user-context
+Authorization: Bearer {{accessToken}}
+
+
+###
+# @name upsertUserContext
+PUT {{baseUrl}}/user-context
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "age_range_min": 30,
+  "age_range_max": 35,
+  "country": "France",
+  "work_situation": "employed",
+  "relationship_status": "single",
+  "family_support_score": 2,
+  "social_connection_score": 3,
+  "work_stress_baseline": 8
+}
+
+
+###
+GET {{baseUrl}}/user-context
+Authorization: Bearer {{accessToken}}
+
+
+###
+PATCH {{baseUrl}}/user-context
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "social_connection_score": 4,
+  "work_stress_baseline": 9
+}
+
+
+### 5. Raw inputs: structured check-in and journal
+
+# @name createCheckin
+POST {{baseUrl}}/checkins
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "mood_score": 5,
+  "stress_score": 8,
+  "energy_score": 4,
+  "sleep_score": 5,
+  "social_score": 6
+}
+
+
+###
+# @name createJournal
+POST {{baseUrl}}/journals
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "content": "I can't stop thinking about work. I feel like I failed again and I am not good enough. It feels like my manager and the project deadline are stuck in my head."
+}
+
+
+### 6. Derived state and traceability
+
+GET {{baseUrl}}/signals
+Authorization: Bearer {{accessToken}}
+
+
+###
+GET {{baseUrl}}/state
+Authorization: Bearer {{accessToken}}
+
+
+###
+GET {{baseUrl}}/llm-runs
+Authorization: Bearer {{accessToken}}
+
+
+### 7. Insights
+
+# @name generateInsights
+POST {{baseUrl}}/insights/generate
+Authorization: Bearer {{accessToken}}
+
+
+###
+GET {{baseUrl}}/insights
+Authorization: Bearer {{accessToken}}
+
+
+### 8. Pattern detections
+### Note: pattern detection needs matching signals on at least 2 days.
+### With only today's manual API data, this may return [] until enough days exist.
+
+# @name detectPatterns
+POST {{baseUrl}}/pattern-detections/detect
+Authorization: Bearer {{accessToken}}
+
+
+###
+GET {{baseUrl}}/pattern-detections
+Authorization: Bearer {{accessToken}}
+
+
+### 9. Action suggestions
+
+# @name generateActions
+POST {{baseUrl}}/actions/generate
+Authorization: Bearer {{accessToken}}
+
+
+###
+GET {{baseUrl}}/actions
+Authorization: Bearer {{accessToken}}
+
+
+###
+GET {{baseUrl}}/actions?include_completed=true&include_dismissed=true
+Authorization: Bearer {{accessToken}}
+
+
+### Optional: complete the first generated action.
+### If your client cannot resolve $[0].id, copy an action id from generateActions.
+# @name completeFirstAction
+PATCH {{baseUrl}}/actions/{{generateActions.response.body.$[0].id}}/complete
+Authorization: Bearer {{accessToken}}
+
+
+### Optional: dismiss the second generated action.
+### If there is no second action, skip this request.
+# @name dismissSecondAction
+PATCH {{baseUrl}}/actions/{{generateActions.response.body.$[1].id}}/dismiss
+Authorization: Bearer {{accessToken}}
+
+
+### 10. Feedback
+
+### Feedback for the first action suggestion.
+# @name createActionFeedback
+POST {{baseUrl}}/feedback
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "target_type": "action_suggestion",
+  "target_id": "{{generateActions.response.body.$[0].id}}",
+  "rating": "useful",
+  "comment": "This felt practical."
+}
+
+
+###
+GET {{baseUrl}}/feedback
+Authorization: Bearer {{accessToken}}
+
+
+### Upsert/update feedback on the same target.
+POST {{baseUrl}}/feedback
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "target_type": "action_suggestion",
+  "target_id": "{{generateActions.response.body.$[0].id}}",
+  "rating": "too_vague",
+  "comment": "Updated after trying it."
+}
+
+
+### 11. Daily reflection
+
+# @name generateDailyReflection
+POST {{baseUrl}}/daily-reflections/generate
+Authorization: Bearer {{accessToken}}
+
+
+###
+GET {{baseUrl}}/daily-reflections/latest
+Authorization: Bearer {{accessToken}}
+
+
+###
+GET {{baseUrl}}/daily-reflections
+Authorization: Bearer {{accessToken}}
+
+
+### Feedback for the generated daily reflection.
+POST {{baseUrl}}/feedback
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "target_type": "daily_reflection",
+  "target_id": "{{generateDailyReflection.response.body.$.id}}",
+  "rating": "useful",
+  "comment": "The summary matched today's context."
+}
+
+
+### 12. Reflection responses
+
+# @name generateReflectionResponse
+POST {{baseUrl}}/reflection-responses/generate
+Authorization: Bearer {{accessToken}}
+
+
+###
+GET {{baseUrl}}/reflection-responses/latest
+Authorization: Bearer {{accessToken}}
+
+
+###
+GET {{baseUrl}}/reflection-responses
+Authorization: Bearer {{accessToken}}
+
+
+### Feedback for the generated reflection response.
+POST {{baseUrl}}/feedback
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "target_type": "reflection_response",
+  "target_id": "{{generateReflectionResponse.response.body.$.id}}",
+  "rating": "useful",
+  "comment": "This felt accurate."
+}
+
+
+### 13. Safety workflow
+### This creates a safety flag through journal analysis, then a safety event.
+
+# @name createSafetyJournal
+POST {{baseUrl}}/journals
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "content": "I am in severe distress and I cannot cope tonight."
+}
+
+
+###
+# @name listSafetyEvents
+GET {{baseUrl}}/safety-events
+Authorization: Bearer {{accessToken}}
+
+
+###
+GET {{baseUrl}}/safety-events/open
+Authorization: Bearer {{accessToken}}
+
+
+### A safety-first reflection response should be generated while the event is open.
+POST {{baseUrl}}/reflection-responses/generate
+Authorization: Bearer {{accessToken}}
+
+
+### Acknowledge the first safety event.
+### If your client cannot resolve $[0].id, copy an event id from listSafetyEvents.
+# @name acknowledgeSafetyEvent
+PATCH {{baseUrl}}/safety-events/{{listSafetyEvents.response.body.$[0].id}}/acknowledge
+Authorization: Bearer {{accessToken}}
+
+
+###
+GET {{baseUrl}}/safety-events/open
+Authorization: Bearer {{accessToken}}
+
+
+### 14. Optional user isolation smoke test
+
+@otherEmail = manual-other-{{$timestamp}}@example.com
+
+# @name registerOtherUser
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{otherEmail}}",
+  "password": "{{password}}"
+}
+
+
+###
+@otherAccessToken = {{registerOtherUser.response.body.$.access_token}}
+
+
+### Other user should not see first user's private resources.
+GET {{baseUrl}}/signals
+Authorization: Bearer {{otherAccessToken}}
+
+
+###
+GET {{baseUrl}}/user-context
+Authorization: Bearer {{otherAccessToken}}
+
+
+###
+GET {{baseUrl}}/state
+Authorization: Bearer {{otherAccessToken}}
+
+
+###
+GET {{baseUrl}}/insights
+Authorization: Bearer {{otherAccessToken}}
+
+
+###
+GET {{baseUrl}}/actions
+Authorization: Bearer {{otherAccessToken}}
+
+
+###
+GET {{baseUrl}}/daily-reflections
+Authorization: Bearer {{otherAccessToken}}
+
+
+###
+GET {{baseUrl}}/reflection-responses
+Authorization: Bearer {{otherAccessToken}}
+
+
+###
+GET {{baseUrl}}/safety-events
+Authorization: Bearer {{otherAccessToken}}
+
+
+### Other user creates independent context.
+PUT {{baseUrl}}/user-context
+Authorization: Bearer {{otherAccessToken}}
+Content-Type: application/json
+
+{
+  "age_range_min": 25,
+  "age_range_max": 29,
+  "country": "Tunisia",
+  "work_situation": "student",
+  "relationship_status": "single",
+  "family_support_score": 7,
+  "social_connection_score": 6,
+  "work_stress_baseline": 4
+}
+
+
+###
+GET {{baseUrl}}/user-context
+Authorization: Bearer {{otherAccessToken}}
+
+
+### 15. Optional validation checks
+
+### Invalid user context score should return 422.
+PUT {{baseUrl}}/user-context
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "age_range_min": 30,
+  "age_range_max": 35,
+  "country": "France",
+  "work_situation": "employed",
+  "relationship_status": "single",
+  "family_support_score": 11,
+  "social_connection_score": 5,
+  "work_stress_baseline": 8
+}
+
+
+### Invalid age range should return 422.
+PUT {{baseUrl}}/user-context
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "age_range_min": 40,
+  "age_range_max": 30,
+  "country": "France",
+  "work_situation": "employed",
+  "relationship_status": "single",
+  "family_support_score": 6,
+  "social_connection_score": 5,
+  "work_stress_baseline": 8
+}
+
+
+### 16. Optional unauthenticated checks
+
+GET {{baseUrl}}/state
+
+
+###
+GET {{baseUrl}}/user-context
+
+
+###
+PUT {{baseUrl}}/user-context
+Content-Type: application/json
+
+{
+  "age_range_min": 30,
+  "age_range_max": 35,
+  "country": "France",
+  "work_situation": "employed",
+  "relationship_status": "single",
+  "family_support_score": 6,
+  "social_connection_score": 5,
+  "work_stress_baseline": 8
+}
+
+
+###
+POST {{baseUrl}}/insights/generate
+
+
+###
+GET {{baseUrl}}/feedback
