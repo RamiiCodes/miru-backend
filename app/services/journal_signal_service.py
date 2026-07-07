@@ -6,6 +6,7 @@ from app.ai.journal_analyzer_factory import get_journal_analyzer
 from app.db.models.journal_entry import JournalEntry
 from app.db.repositories.llm_run_repository import create_llm_run
 from app.db.repositories.signal_catalog_repository import get_signal_by_code
+from app.services.safety_event_service import create_safety_events_from_flags
 from app.db.repositories.user_signal_repository import (
     create_user_signal,
     get_user_signal_by_source,
@@ -22,6 +23,13 @@ def create_user_signals_from_journal(
 
     try:
         analysis_result = analyzer.analyze(journal_entry.content)
+        create_safety_events_from_flags(
+            db=db,
+            user_id=journal_entry.user_id,
+            source_type="journal_entry",
+            source_id=journal_entry.id,
+            safety_flags=analysis_result.safety_flags,
+                                        )
 
         latency_ms = int((time.perf_counter() - started_at) * 1000)
 

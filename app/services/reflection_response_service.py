@@ -19,6 +19,7 @@ from app.db.repositories.reflection_response_repository import (
 )
 from app.db.repositories.user_feedback_repository import list_user_feedback_by_user_id
 from app.db.repositories.user_profile_repository import get_user_profile_by_user_id
+from app.db.repositories.safety_event_repository import list_open_safety_events_by_user_id
 
 
 PRIORITY_ORDER = {
@@ -174,6 +175,37 @@ def _build_message(
 
     return " ".join(parts)
 
+def _build_safety_first_message(
+        tone: str,
+        flag_types: list[str]
+) -> str:
+    if tone == "direct":
+        opening = (
+            "Direct safety check-in: this entry may be heavier than a normal reflection."
+        )
+    elif tone == "gentle":
+        opening = (
+            "A gentle safety check-in: this may be a moment that deserves extra support."
+        )
+    elif tone == "detailed":
+        opening = (
+            "Detailed safety check-in: Miru detected safety-related signals and is prioritizing support over normal advice."
+        )
+    else:
+        opening = (
+            "Safety check-in: this may be more than a normal daily reflection."
+        )
+
+    flags_text = ", ".join(flag_types)
+
+    return (
+        f"{opening} "
+        f"Detected safety signal(s): {flags_text}. "
+        "Miru is not a crisis service and this is not a diagnosis. "
+        "If you feel at risk right now, contact local emergency services or reach out to someone you trust. "
+        "For now, the safest next step is to pause, avoid staying alone with the situation if possible, "
+        "and seek real human support."
+    )
 
 def generate_reflection_response_for_user(
     db: Session,
@@ -190,6 +222,36 @@ def generate_reflection_response_for_user(
     )
 
     tone = _select_tone(db=db, user_id=user_id)
+
+    open_safety_events = list_open_safety_events_by_user_id(
+        db=db,
+        user_id=user_id,
+    )
+
+    if open_safety_events:
+        flag_types = sorted({event.flag_type for event in open_safety_events})
+
+        return create_reflection_response(
+            db=db,
+            user_id=user_id,
+            source_type="manual",
+            source_id=None,
+            title="Safety check-in",
+            message=_build_safety_first_message(
+                tone=tone,
+                flag_types=flag_types,
+            ),
+            tone=tone,
+            response_type="gentle_checkin",
+            suggested_action_id=None,
+            source_snapshot_json={
+                "safety_event_ids": [
+                    str(event.id) for event in open_safety_events
+                ],
+                "safety_flag_types": flag_types,
+                "tone_source": tone,
+            },
+        )
 
     latest_insights = insights[:3]
     latest_patterns = patterns[:3]

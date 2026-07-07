@@ -60,6 +60,38 @@ JOURNAL_SIGNAL_KEYWORDS = {
 }
 
 
+SAFETY_KEYWORDS = {
+    "self_harm_risk": [
+        "kill myself",
+        "end my life",
+        "hurt myself",
+        "suicide",
+        "suicidal",
+    ],
+    "harm_to_others_risk": [
+        "hurt someone",
+        "kill someone",
+        "harm someone",
+        "attack someone",
+    ],
+    "abuse_or_coercion_context": [
+        "abused",
+        "coerced",
+        "forced me",
+        "threatened me",
+        "controlled me",
+    ],
+    "severe_distress": [
+        "severe distress",
+        "cannot cope",
+        "can't cope",
+        "can't take it anymore",
+        "panic attack",
+        "overwhelmed and unsafe",
+    ],
+}
+
+
 SIGNAL_REASONS = {
     "rumination_tendency": "The journal contains language suggesting repetitive or looping thoughts.",
     "self_criticism": "The journal contains language suggesting self-critical thoughts.",
@@ -101,12 +133,22 @@ class KeywordJournalAnalyzer:
 
         return JournalAnalysisResult(
             detected_signals=detected_signals,
-            safety_flags=[],
+            safety_flags=self._detect_safety_flags(content),
             language=None,
             provider=self.provider,
             model_name=self.model_name,
             prompt_version=self.prompt_version,
         )
+
+    def _detect_safety_flags(self, content: str) -> list[str]:
+        normalized_content = content.lower()
+        detected_flags: list[str] = []
+
+        for flag_type, keywords in SAFETY_KEYWORDS.items():
+            if any(keyword in normalized_content for keyword in keywords):
+                detected_flags.append(flag_type)
+
+        return detected_flags
 
     def _find_matched_keywords(
         self,

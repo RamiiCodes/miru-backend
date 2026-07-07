@@ -12,6 +12,7 @@ from app.db.models.daily_reflection import DailyReflection
 from app.db.models.user_profile import UserProfile
 from app.db.models.user_feedback import UserFeedback
 from app.db.models.reflection_response import ReflectionResponse
+from app.db.models.safety_event import SafetyEvent
 
 __all__ = [
     "User",
@@ -27,5 +28,6 @@ __all__ = [
     "DailyReflection",
     "UserProfile",
     "UserFeedback",
-    "ReflectionResponse"
+    "ReflectionResponse",
+    "SafetyEvent",
 ]
