@@ -25,7 +25,10 @@ from app.db.repositories.safety_event_repository import list_open_safety_events_
 from app.db.repositories.user_context_repository import get_user_context_by_user_id
 from app.db.repositories.user_feedback_repository import list_user_feedback_by_user_id
 from app.db.repositories.user_profile_repository import get_user_profile_by_user_id
-
+from app.db.models.user_coping_style import UserCopingStyle
+from app.db.repositories.user_coping_style_repository import (
+    get_user_coping_style_by_user_id,
+)
 
 """
 Technical helper.
@@ -56,6 +59,7 @@ class ReasoningInputs:
     active_actions: list[ActionSuggestion]
     latest_feedback: list[UserFeedback]
     open_safety_events: list[SafetyEvent]
+    coping_style: UserCopingStyle | None
 
 
 def assemble_reasoning_inputs(
@@ -99,6 +103,10 @@ def assemble_reasoning_inputs(
         current_state=get_latest_current_emotional_state(
             db=db,
             user_id=user_id,
+        ),
+        coping_style=get_user_coping_style_by_user_id(
+        db=db,
+        user_id=user_id,
         ),
         latest_insights=insights[:insight_limit],
         latest_patterns=patterns[:pattern_limit],

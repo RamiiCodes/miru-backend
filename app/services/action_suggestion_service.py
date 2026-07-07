@@ -11,6 +11,38 @@ from app.db.repositories.current_emotional_state_repository import (
 from app.db.repositories.pattern_detection_repository import (
     list_pattern_detections_by_user_id,
 )
+from app.db.repositories.user_coping_style_repository import (
+    get_user_coping_style_by_user_id,
+)
+from app.helpers.coping_style_action_ranker import (
+    adjust_confidence_for_coping_style,
+    adjust_priority_for_coping_style,
+    calculate_coping_match_score,
+)
+
+
+def _apply_coping_style_adjustments(
+    action_code: str,
+    priority: str,
+    confidence: float,
+    coping_style,
+) -> tuple[str, float]:
+    coping_match_score = calculate_coping_match_score(
+        action_code=action_code,
+        coping_style=coping_style,
+    )
+
+    adjusted_priority = adjust_priority_for_coping_style(
+        priority=priority,
+        coping_match_score=coping_match_score,
+    )
+
+    adjusted_confidence = adjust_confidence_for_coping_style(
+        confidence=confidence,
+        coping_match_score=coping_match_score,
+    )
+
+    return adjusted_priority, adjusted_confidence
 
 
 def generate_action_suggestions_for_user(
@@ -21,13 +53,17 @@ def generate_action_suggestions_for_user(
     insights = list_basic_insights_by_user_id(db=db, user_id=user_id)
     patterns = list_pattern_detections_by_user_id(db=db, user_id=user_id)
 
+    coping_style = get_user_coping_style_by_user_id(
+        db=db,
+        user_id=user_id,
+    )
+
     actions_to_create: list[dict] = []
     seen_action_codes: set[str] = set()
 
     def add_action(action_data: dict) -> None:
         action_code = action_data["action_code"]
 
-        # Avoid showing the same practical action twice in one generation pass.
         if action_code in seen_action_codes:
             return
 
@@ -200,7 +236,7 @@ def generate_action_suggestions_for_user(
                     "reason": "Your current stress level is elevated.",
                     "source_type": "current_emotional_state",
                     "source_id": state.id,
-                    "confidence": 0.7,
+                    "confidence": 0.70,
                 }
             )
 
@@ -244,13 +280,20 @@ def generate_action_suggestions_for_user(
                     "reason": "Your current social connection signal is low.",
                     "source_type": "current_emotional_state",
                     "source_id": state.id,
-                    "confidence": 0.6,
+                    "confidence": 0.60,
                 }
             )
 
     created_actions: list[ActionSuggestion] = []
 
     for action_data in actions_to_create:
+        adjusted_priority, adjusted_confidence = _apply_coping_style_adjustments(
+            action_code=action_data["action_code"],
+            priority=action_data["priority"],
+            confidence=action_data["confidence"],
+            coping_style=coping_style,
+        )
+
         created_action = create_action_suggestion(
             db=db,
             user_id=user_id,
@@ -258,11 +301,11 @@ def generate_action_suggestions_for_user(
             title=action_data["title"],
             description=action_data["description"],
             action_type=action_data["action_type"],
-            priority=action_data["priority"],
+            priority=adjusted_priority,
             reason=action_data["reason"],
             source_type=action_data["source_type"],
             source_id=action_data["source_id"],
-            confidence=action_data["confidence"],
+            confidence=adjusted_confidence,
         )
 
         created_actions.append(created_action)

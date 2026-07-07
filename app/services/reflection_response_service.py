@@ -12,7 +12,7 @@ from app.helpers.reasoning_input_assembler import (
     ReasoningInputs,
     assemble_reasoning_inputs,
 )
-
+from app.helpers.coping_style_action_ranker import rank_actions_by_coping_style
 
 PRIORITY_ORDER = {
     "high": 3,
@@ -57,7 +57,10 @@ def _select_tone(reasoning_inputs: ReasoningInputs) -> str:
     return "balanced"
 
 
-def _select_top_action(actions: list[ActionSuggestion]) -> ActionSuggestion | None:
+def _select_top_action(
+    actions: list[ActionSuggestion],
+    coping_style,
+) -> ActionSuggestion | None:
     active_actions = [
         action
         for action in actions
@@ -67,16 +70,12 @@ def _select_top_action(actions: list[ActionSuggestion]) -> ActionSuggestion | No
     if not active_actions:
         return None
 
-    sorted_actions = sorted(
-        active_actions,
-        key=lambda action: (
-            PRIORITY_ORDER.get(action.priority, 0),
-            action.created_at,
-        ),
-        reverse=True,
+    ranked_actions = rank_actions_by_coping_style(
+        actions=active_actions,
+        coping_style=coping_style,
     )
 
-    return sorted_actions[0]
+    return ranked_actions[0]
 
 
 def _build_title(
@@ -296,12 +295,16 @@ def generate_reflection_response_for_user(
                 "safety_flag_types": flag_types,
                 "user_context_available": reasoning_inputs.user_context is not None,
                 "tone_source": tone,
+                "coping_style_available": reasoning_inputs.coping_style is not None,
             },
         )
 
     latest_insights = reasoning_inputs.latest_insights
     latest_patterns = reasoning_inputs.latest_patterns
-    top_action = _select_top_action(reasoning_inputs.active_actions)
+    top_action = _select_top_action(
+    actions=reasoning_inputs.active_actions,
+    coping_style=reasoning_inputs.coping_style,
+)
 
     insight_titles = [insight.title for insight in latest_insights]
     pattern_titles = [pattern.title for pattern in latest_patterns]
@@ -352,6 +355,7 @@ def generate_reflection_response_for_user(
             else None
         ),
         "tone_source": tone,
+        "coping_style_available": reasoning_inputs.coping_style is not None,
     }
 
     return create_reflection_response(
