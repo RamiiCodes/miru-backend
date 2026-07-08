@@ -53,8 +53,8 @@ def test_create_journal_creates_llm_run(client):
     assert llm_run["source_id"] == journal["id"]
 
     assert llm_run["provider"] == "keyword"
-    assert llm_run["model_name"] == "keyword_rules_v0_1"
-    assert llm_run["prompt_version"] == "journal_signal_extraction_v0_1"
+    assert llm_run["model_name"] == "keyword_rules_v0_2"
+    assert llm_run["prompt_version"] == "journal_signal_extraction_v0_2"
 
     assert llm_run["input_text"] == journal_content
     assert llm_run["status"] == "success"
@@ -64,8 +64,8 @@ def test_create_journal_creates_llm_run(client):
     output_json = llm_run["output_json"]
 
     assert output_json["provider"] == "keyword"
-    assert output_json["model_name"] == "keyword_rules_v0_1"
-    assert output_json["prompt_version"] == "journal_signal_extraction_v0_1"
+    assert output_json["model_name"] == llm_run["model_name"]
+    assert output_json["prompt_version"] == llm_run["prompt_version"]
 
     detected_signals = output_json["detected_signals"]
 

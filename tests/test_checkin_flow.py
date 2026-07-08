@@ -100,10 +100,7 @@ def test_create_checkin_creates_user_signals_and_current_state(client):
     assert state["eating_habits"] is None
 
     assert state["confidence"] == 0.95
-    assert state["model_version"] in [
-        "current_emotional_state_v0_1",
-        "current_emotional_state_v0_2",
-    ]
+    assert state["model_version"].startswith("current_emotional_state_v0_")
 
 
 def test_checkin_requires_authentication(client):

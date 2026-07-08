@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -5,47 +6,68 @@ from sqlalchemy.orm import Session
 from app.db.models.current_emotional_state import CurrentEmotionalState
 from app.db.models.signal_catalog import SignalCatalog
 from app.db.models.user_signal import UserSignal
-from app.db.repositories.current_emotional_state_repository import (
-    create_current_emotional_state,
-)
 
 
-SIGNAL_TO_STATE_FIELD = {
-    "stress_level": "stress_level",
-    "energy_level": "energy_level",
-    "sleep_quality": "sleep_quality",
-    "social_connection": "social_connection",
-    "mood_level": "emotional_stability",
-}
+MODEL_VERSION = "current_emotional_state_v0_3"
 
 
-def _clamp(value: float) -> float:
-    return round(max(0.0, min(1.0, value)), 2)
+def _clamp(value: float | None) -> float | None:
+    if value is None:
+        return None
+
+    return max(0.0, min(1.0, round(value, 2)))
 
 
-def _get_latest_signal_values_by_code(
+def _get_user_signal_catalog_fk_column():
+    if hasattr(UserSignal, "signal_catalog_id"):
+        return UserSignal.signal_catalog_id
+
+    if hasattr(UserSignal, "signal_id"):
+        return UserSignal.signal_id
+
+    raise AttributeError(
+        "UserSignal must expose either 'signal_catalog_id' or 'signal_id'."
+    )
+
+
+def _load_latest_signal_values(
     db: Session,
     user_id: UUID,
-) -> dict[str, UserSignal]:
+) -> dict[str, dict[str, float]]:
+    signal_catalog_fk_column = _get_user_signal_catalog_fk_column()
+
     rows = (
-        db.query(UserSignal, SignalCatalog.code)
-        .join(SignalCatalog, UserSignal.signal_id == SignalCatalog.id)
+        db.query(
+            SignalCatalog.code,
+            UserSignal.value,
+            UserSignal.confidence,
+            UserSignal.recorded_at,
+        )
+        .join(
+            SignalCatalog,
+            signal_catalog_fk_column == SignalCatalog.id,
+        )
         .filter(UserSignal.user_id == user_id)
         .order_by(UserSignal.recorded_at.desc())
         .all()
     )
 
-    latest_by_code: dict[str, UserSignal] = {}
+    latest_signals: dict[str, dict[str, float]] = {}
 
-    for user_signal, signal_code in rows:
-        if signal_code not in latest_by_code:
-            latest_by_code[signal_code] = user_signal
+    for code, value, confidence, _recorded_at in rows:
+        if code in latest_signals:
+            continue
 
-    return latest_by_code
+        latest_signals[code] = {
+            "value": value,
+            "confidence": confidence,
+        }
+
+    return latest_signals
 
 
-def _get_signal_value(
-    latest_signals: dict[str, UserSignal],
+def _signal_value(
+    latest_signals: dict[str, dict[str, float]],
     signal_code: str,
 ) -> float | None:
     signal = latest_signals.get(signal_code)
@@ -53,111 +75,210 @@ def _get_signal_value(
     if signal is None:
         return None
 
-    return signal.value
+    return signal["value"]
 
 
-def _collect_confidences(
-    latest_signals: dict[str, UserSignal],
-    signal_codes: list[str],
-) -> list[float]:
-    confidences: list[float] = []
+def _signal_confidence(
+    latest_signals: dict[str, dict[str, float]],
+    signal_code: str,
+) -> float | None:
+    signal = latest_signals.get(signal_code)
 
-    for signal_code in signal_codes:
-        signal = latest_signals.get(signal_code)
+    if signal is None:
+        return None
 
-        if signal is not None:
-            confidences.append(signal.confidence)
+    return signal["confidence"]
 
-    return confidences
+
+def _has_meaningful_signal(value: float | None, threshold: float = 0.5) -> bool:
+    return value is not None and value >= threshold
+
+
+def _calculate_confidence(
+    latest_signals: dict[str, dict[str, float]],
+    used_signal_codes: list[str],
+) -> float:
+    confidences = [
+        _signal_confidence(latest_signals, signal_code)
+        for signal_code in used_signal_codes
+    ]
+
+    valid_confidences = [
+        confidence
+        for confidence in confidences
+        if confidence is not None
+    ]
+
+    if not valid_confidences:
+        return 0.3
+
+    return _clamp(sum(valid_confidences) / len(valid_confidences)) or 0.3
+
+
+def _get_or_create_current_state(
+    db: Session,
+    user_id: UUID,
+) -> CurrentEmotionalState:
+    current_state = (
+        db.query(CurrentEmotionalState)
+        .filter(CurrentEmotionalState.user_id == user_id)
+        .first()
+    )
+
+    if current_state is not None:
+        return current_state
+
+    current_state = CurrentEmotionalState(user_id=user_id)
+
+    db.add(current_state)
+    db.flush()
+
+    return current_state
 
 
 def calculate_current_emotional_state(
     db: Session,
     user_id: UUID,
 ) -> CurrentEmotionalState:
-    latest_signals = _get_latest_signal_values_by_code(
+    latest_signals = _load_latest_signal_values(
         db=db,
         user_id=user_id,
     )
 
-    mood_level = _get_signal_value(latest_signals, "mood_level")
-    stress_signal = _get_signal_value(latest_signals, "stress_level")
-    energy_level = _get_signal_value(latest_signals, "energy_level")
-    sleep_quality = _get_signal_value(latest_signals, "sleep_quality")
-    social_connection = _get_signal_value(latest_signals, "social_connection")
+    mood_level = _signal_value(latest_signals, "mood_level")
+    stress_level = _signal_value(latest_signals, "stress_level")
+    energy_level = _signal_value(latest_signals, "energy_level")
+    sleep_quality = _signal_value(latest_signals, "sleep_quality")
+    social_connection = _signal_value(latest_signals, "social_connection")
 
-    rumination = _get_signal_value(latest_signals, "rumination_tendency")
-    self_criticism = _get_signal_value(latest_signals, "self_criticism")
-    fear_of_failure = _get_signal_value(latest_signals, "fear_of_failure")
-    work_sensitivity = _get_signal_value(latest_signals, "work_sensitivity")
+    rumination_tendency = _signal_value(latest_signals, "rumination_tendency")
+    self_criticism = _signal_value(latest_signals, "self_criticism")
+    fear_of_failure = _signal_value(latest_signals, "fear_of_failure")
+    work_sensitivity = _signal_value(latest_signals, "work_sensitivity")
 
-    # Base structured values
-    stress_level = stress_signal
+    grief_loss = _signal_value(latest_signals, "grief_loss")
+    emotional_numbness = _signal_value(latest_signals, "emotional_numbness")
+    disorientation = _signal_value(latest_signals, "disorientation")
+    loneliness = _signal_value(latest_signals, "loneliness")
+    overwhelm = _signal_value(latest_signals, "overwhelm")
+
+    used_signal_codes = list(latest_signals.keys())
+
     emotional_stability = mood_level
-
-    # Journal-derived cognitive influence
-    if stress_level is not None:
-        if rumination is not None:
-            stress_level += rumination * 0.15
-
-        if work_sensitivity is not None:
-            stress_level += work_sensitivity * 0.10
-
-        stress_level = _clamp(stress_level)
-
-    if emotional_stability is not None:
-        if rumination is not None:
-            emotional_stability -= rumination * 0.15
-
-        if fear_of_failure is not None:
-            emotional_stability -= fear_of_failure * 0.10
-
-        emotional_stability = _clamp(emotional_stability)
-
-    # Derived cognitive state fields
     motivation = None
-    if fear_of_failure is not None:
-        motivation = _clamp(1.0 - fear_of_failure)
-
     self_esteem = None
-    if self_criticism is not None:
-        self_esteem = _clamp(1.0 - self_criticism)
 
-    physical_activity = None
-    eating_habits = None
-
-    used_confidences = _collect_confidences(
-        latest_signals=latest_signals,
-        signal_codes=[
-            "mood_level",
-            "stress_level",
-            "energy_level",
-            "sleep_quality",
-            "social_connection",
-            "rumination_tendency",
-            "self_criticism",
-            "fear_of_failure",
-            "work_sensitivity",
-        ],
+    stress_related_signals_present = any(
+        [
+            _has_meaningful_signal(rumination_tendency),
+            _has_meaningful_signal(work_sensitivity),
+            _has_meaningful_signal(overwhelm),
+            _has_meaningful_signal(grief_loss),
+            _has_meaningful_signal(disorientation),
+        ]
     )
 
-    if used_confidences:
-        confidence = round(sum(used_confidences) / len(used_confidences), 2)
-    else:
-        confidence = 0.0
+    if stress_level is None and stress_related_signals_present:
+        stress_level = 0.5
 
-    return create_current_emotional_state(
+    emotional_stability_related_signals_present = any(
+        [
+            _has_meaningful_signal(rumination_tendency),
+            _has_meaningful_signal(fear_of_failure),
+            _has_meaningful_signal(self_criticism),
+            _has_meaningful_signal(grief_loss),
+            _has_meaningful_signal(emotional_numbness),
+            _has_meaningful_signal(overwhelm),
+            _has_meaningful_signal(disorientation),
+        ]
+    )
+
+    if emotional_stability is None and emotional_stability_related_signals_present:
+        emotional_stability = 0.5
+
+    if _has_meaningful_signal(rumination_tendency):
+        if stress_level is not None:
+            stress_level += 0.15
+
+        if emotional_stability is not None:
+            emotional_stability -= 0.15
+
+    if _has_meaningful_signal(work_sensitivity):
+        if stress_level is not None:
+            stress_level += 0.10
+
+    if _has_meaningful_signal(overwhelm):
+        if stress_level is None:
+            stress_level = 0.5
+
+        stress_level += 0.20
+
+        if emotional_stability is not None:
+            emotional_stability -= 0.15
+
+    if _has_meaningful_signal(grief_loss):
+        if stress_level is None:
+            stress_level = 0.5
+
+        stress_level += 0.15
+
+        if emotional_stability is not None:
+            emotional_stability -= 0.20
+
+    if _has_meaningful_signal(emotional_numbness):
+        if emotional_stability is not None:
+            emotional_stability -= 0.15
+
+    if _has_meaningful_signal(disorientation):
+        if stress_level is None:
+            stress_level = 0.5
+
+        stress_level += 0.10
+
+        if emotional_stability is not None:
+            emotional_stability -= 0.10
+
+    if _has_meaningful_signal(loneliness):
+        if social_connection is None:
+            social_connection = 1 - loneliness
+        else:
+            social_connection -= 0.10
+
+    if fear_of_failure is not None:
+        motivation = 1 - fear_of_failure
+
+        if _has_meaningful_signal(fear_of_failure):
+            if emotional_stability is not None:
+                emotional_stability -= 0.10
+
+    if self_criticism is not None:
+        self_esteem = 1 - self_criticism
+
+    current_state = _get_or_create_current_state(
         db=db,
         user_id=user_id,
-        stress_level=stress_level,
-        energy_level=energy_level,
-        sleep_quality=sleep_quality,
-        social_connection=social_connection,
-        emotional_stability=emotional_stability,
-        motivation=motivation,
-        self_esteem=self_esteem,
-        physical_activity=physical_activity,
-        eating_habits=eating_habits,
-        confidence=confidence,
-        model_version="current_emotional_state_v0_2",
     )
+
+    current_state.stress_level = _clamp(stress_level)
+    current_state.energy_level = _clamp(energy_level)
+    current_state.sleep_quality = _clamp(sleep_quality)
+    current_state.social_connection = _clamp(social_connection)
+    current_state.emotional_stability = _clamp(emotional_stability)
+    current_state.motivation = _clamp(motivation)
+    current_state.self_esteem = _clamp(self_esteem)
+
+    current_state.physical_activity = None
+    current_state.eating_habits = None
+
+    current_state.confidence = _calculate_confidence(
+        latest_signals=latest_signals,
+        used_signal_codes=used_signal_codes,
+    )
+    current_state.model_version = MODEL_VERSION
+    current_state.calculated_at = datetime.now(timezone.utc)
+
+    db.add(current_state)
+    db.commit()
+    db.refresh(current_state)
+
+    return current_state
