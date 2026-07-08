@@ -15,6 +15,8 @@ from app.db.models.reflection_response import ReflectionResponse
 from app.db.models.safety_event import SafetyEvent
 from app.db.models.user_context import UserContext
 from app.db.models.user_coping_style import UserCopingStyle
+from app.db.models.journal_analysis import JournalAnalysis
+from app.db.models.journal_extracted_signal import JournalExtractedSignal
 
 __all__ = [
     "User",
@@ -34,4 +36,6 @@ __all__ = [
     "SafetyEvent",
     "UserContext",
     "UserCopingStyle",
+    "JournalAnalysis",
+    "JournalExtractedSignal",
 ]

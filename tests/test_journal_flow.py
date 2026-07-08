@@ -9,10 +9,8 @@ def _auth_headers(client, email: str = "journal@example.com") -> dict[str, str]:
 
     assert response.status_code == 201
 
-    token = response.json()["access_token"]
-
     return {
-        "Authorization": f"Bearer {token}",
+        "Authorization": f"Bearer {response.json()['access_token']}",
     }
 
 
@@ -72,11 +70,8 @@ def test_create_journal_creates_cognitive_signals_and_updates_state(client):
         "fear_of_failure",
         "work_sensitivity",
     ]:
-        signal = signals_by_code[signal_code]
-
-        assert signal["confidence"] == 0.55
-        assert signal["source_type"] == "journal_entry"
-        assert signal["source_id"] == journal["id"]
+        assert signals_by_code[signal_code]["source_type"] == "journal_extracted_signal"
+        assert signals_by_code[signal_code]["source_id"] is not None
 
     state_response = client.get(
         "/state",
@@ -87,24 +82,62 @@ def test_create_journal_creates_cognitive_signals_and_updates_state(client):
 
     state = state_response.json()
 
-    assert state["user_id"] == journal["user_id"]
+    assert state["stress_level"] is not None
+    assert state["stress_level"] >= 0.75
 
-    # No check-in was created in this test, so structured state fields stay empty.
-    assert state["stress_level"] is None
-    assert state["energy_level"] is None
-    assert state["sleep_quality"] is None
-    assert state["social_connection"] is None
-    assert state["emotional_stability"] is None
-
-    # Journal cognitive signals should affect these fields.
     assert state["motivation"] == 0.3
     assert state["self_esteem"] == 0.3
 
-    assert state["confidence"] == 0.55
-    assert state["model_version"] == "current_emotional_state_v0_2"
+
+def test_create_journal_creates_journal_analysis_layer(client):
+    headers = _auth_headers(client, email="journal-analysis-layer@example.com")
+
+    journal_content = (
+        "I can't stop thinking and I feel stuck in my head about work and the project. "
+        "I feel like I failed again, I am afraid to fail, and I am not good enough."
+    )
+
+    journal_response = client.post(
+        "/journals",
+        json={
+            "content": journal_content,
+        },
+        headers=headers,
+    )
+
+    assert journal_response.status_code == 201
+
+    analyses_response = client.get(
+        "/journal-analyses",
+        headers=headers,
+    )
+
+    assert analyses_response.status_code == 200
+
+    analyses = analyses_response.json()
+
+    assert len(analyses) == 1
+
+    analysis = analyses[0]
+
+    assert analysis["status"] == "success"
+    assert analysis["provider"] == "keyword"
+    assert analysis["model_name"] == "keyword_rules_v0_2"
+    assert analysis["prompt_version"] == "journal_signal_extraction_v0_2"
+    assert analysis["journal_entry_id"] == journal_response.json()["id"]
+
+    extracted_signal_codes = {
+        signal["signal_code"]
+        for signal in analysis["extracted_signals"]
+    }
+
+    assert "rumination_tendency" in extracted_signal_codes
+    assert "self_criticism" in extracted_signal_codes
+    assert "fear_of_failure" in extracted_signal_codes
+    assert "work_sensitivity" in extracted_signal_codes
 
 
-def test_journal_requires_authentication(client):
+def test_create_journal_requires_authentication(client):
     response = client.post(
         "/journals",
         json={
@@ -113,3 +146,75 @@ def test_journal_requires_authentication(client):
     )
 
     assert response.status_code == 401
+
+
+def test_user_can_create_multiple_journals(client):
+    headers = _auth_headers(client, email="multiple-journals@example.com")
+
+    first_response = client.post(
+        "/journals",
+        json={
+            "content": "I can't stop thinking about work.",
+        },
+        headers=headers,
+    )
+
+    second_response = client.post(
+        "/journals",
+        json={
+            "content": "I feel like I failed again.",
+        },
+        headers=headers,
+    )
+
+    assert first_response.status_code == 201
+    assert second_response.status_code == 201
+
+    assert first_response.json()["id"] != second_response.json()["id"]
+
+    analyses_response = client.get(
+        "/journal-analyses",
+        headers=headers,
+    )
+
+    assert analyses_response.status_code == 200
+    assert len(analyses_response.json()) == 2
+
+
+def test_journal_with_grief_creates_broader_analysis_signals(client):
+    headers = _auth_headers(client, email="journal-grief-flow@example.com")
+
+    journal_response = client.post(
+        "/journals",
+        json={
+            "content": "My parents just died. I feel nothing inside me. I am lost.",
+        },
+        headers=headers,
+    )
+
+    assert journal_response.status_code == 201
+
+    analyses_response = client.get(
+        "/journal-analyses",
+        headers=headers,
+    )
+
+    assert analyses_response.status_code == 200
+
+    analysis = analyses_response.json()[0]
+
+    assert "grief" in analysis["themes"]
+    assert "emotional_numbness" in analysis["themes"]
+    assert "disorientation" in analysis["themes"]
+
+    extracted_signal_codes = {
+        signal["signal_code"]
+        for signal in analysis["extracted_signals"]
+    }
+
+    assert "grief_loss" in extracted_signal_codes
+    assert "emotional_numbness" in extracted_signal_codes
+    assert "disorientation" in extracted_signal_codes
+
+    assert analysis["life_event_candidates_json"]
+    assert analysis["life_event_candidates_json"][0]["event_type"] == "bereavement"

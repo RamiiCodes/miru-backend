@@ -18,6 +18,7 @@ from app.api.routes.reflection_responses import router as reflection_responses_r
 from app.api.routes.safety_events import router as safety_events_router
 from app.api.routes.user_context import router as user_context_router
 from app.api.routes.user_coping_styles import router as user_coping_styles_router
+from app.api.routes.journal_analyses import router as journal_analyses_router
 
 app = FastAPI(
     title="Miru API",
@@ -32,19 +33,40 @@ app.include_router(user_profiles_router, prefix="/profile", tags=["User Profile"
 app.include_router(journals_router, prefix="/journals", tags=["Journals"])
 app.include_router(checkins_router, prefix="/checkins", tags=["Structured Check-ins"])
 app.include_router(user_signals_router, prefix="/signals", tags=["UserSignals"])
-app.include_router(current_state_router, prefix="/state", tags=["Current Emotional State"])
+app.include_router(
+    current_state_router, prefix="/state", tags=["Current Emotional State"]
+)
 app.include_router(basic_insights_router, prefix="/insights", tags=["Basic Insights"])
 app.include_router(llm_runs_router, prefix="/llm-runs", tags=["LLM Runs"])
-app.include_router(pattern_detections_router, prefix="/pattern-detections", tags=["Pattern Detections"])
-app.include_router(action_suggestions_router, prefix="/action-suggestions", tags=["Action Suggestions"])
-app.include_router(action_suggestions_router, prefix="/actions", tags=["Action Suggestions"])
-app.include_router(daily_reflections_router, prefix="/daily-reflections", tags=["Daily Reflections"])
+app.include_router(
+    pattern_detections_router, prefix="/pattern-detections", tags=["Pattern Detections"]
+)
+app.include_router(
+    action_suggestions_router, prefix="/action-suggestions", tags=["Action Suggestions"]
+)
+app.include_router(
+    action_suggestions_router, prefix="/actions", tags=["Action Suggestions"]
+)
+app.include_router(
+    daily_reflections_router, prefix="/daily-reflections", tags=["Daily Reflections"]
+)
 app.include_router(user_feedback_router, prefix="/feedback", tags=["User Feedback"])
-app.include_router(reflection_responses_router, prefix="/reflection-responses", tags=["Reflection Responses"])
-app.include_router(safety_events_router, prefix="/safety-events", tags=["Safety Events"])
+app.include_router(
+    reflection_responses_router,
+    prefix="/reflection-responses",
+    tags=["Reflection Responses"],
+)
+app.include_router(
+    safety_events_router, prefix="/safety-events", tags=["Safety Events"]
+)
 app.include_router(user_context_router, prefix="/user-context", tags=["User Context"])
 app.include_router(
     user_coping_styles_router,
     prefix="/user-coping-styles",
     tags=["User Coping Styles"],
+)
+app.include_router(
+    journal_analyses_router,
+    prefix="/journal-analyses",
+    tags=["Journal Analyses"],
 )
