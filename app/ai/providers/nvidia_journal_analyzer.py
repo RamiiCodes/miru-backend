@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 from pydantic import BaseModel, Field, ValidationError, model_validator
-from rich import themes
+
 
 from app.ai.journal_analyzer import (
     DetectedJournalSignal,

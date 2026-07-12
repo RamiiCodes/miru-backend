@@ -13,7 +13,7 @@ from app.db.repositories.journal_analysis_repository import (
     create_journal_extracted_signal,
 )
 from app.services.safety_event_service import create_safety_events_from_flags
-
+from app.services.life_event_service import create_life_events_from_journal_analysis
 
 def _to_json_safe_dict(value) -> dict:
     if value is None:
@@ -192,6 +192,12 @@ def create_user_signals_from_journal(
         raw_output_json=raw_output_json,
         error_message=None,
         latency_ms=latency_ms,
+    )
+    create_life_events_from_journal_analysis(
+    db=db,
+    user_id=journal_entry.user_id,
+    journal_analysis_id=journal_analysis.id,
+    life_event_candidates=life_event_candidates_json,
     )
 
     _create_llm_run(

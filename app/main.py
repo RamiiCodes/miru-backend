@@ -19,6 +19,7 @@ from app.api.routes.safety_events import router as safety_events_router
 from app.api.routes.user_context import router as user_context_router
 from app.api.routes.user_coping_styles import router as user_coping_styles_router
 from app.api.routes.journal_analyses import router as journal_analyses_router
+from app.api.routes.life_events import router as life_events_router
 
 app = FastAPI(
     title="Miru API",
@@ -69,4 +70,9 @@ app.include_router(
     journal_analyses_router,
     prefix="/journal-analyses",
     tags=["Journal Analyses"],
+)
+app.include_router(
+    life_events_router,
+    prefix="/life-events",
+    tags=["Life Events"],
 )
