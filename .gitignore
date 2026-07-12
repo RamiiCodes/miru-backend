@@ -9,3 +9,9 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+# Claude Code local/personal settings
+.claude/settings.local.json
+# Claude Code local scratch files
+.claude/local/
+.claude/cache/
+.claude/logs/

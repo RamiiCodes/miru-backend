@@ -1,6 +1,7 @@
 from app.ai.journal_analyzer import JournalAnalyzer
 from app.ai.providers.fake_journal_analyzer import FakeJournalAnalyzer
 from app.ai.providers.keyword_journal_analyzer import KeywordJournalAnalyzer
+from app.ai.providers.nvidia_journal_analyzer import NvidiaJournalAnalyzer
 from app.ai.providers.ollama_journal_analyzer import OllamaJournalAnalyzer
 from app.core.config import settings
 
@@ -13,6 +14,9 @@ def get_journal_analyzer() -> JournalAnalyzer:
 
     if provider == "fake":
         return FakeJournalAnalyzer()
+    
+    if provider == "nvidia":
+        return NvidiaJournalAnalyzer()
 
     if provider == "ollama":
         return OllamaJournalAnalyzer()
