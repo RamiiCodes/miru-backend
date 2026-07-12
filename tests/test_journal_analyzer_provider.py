@@ -1,9 +1,22 @@
 import pytest
 
 from app.ai.journal_analyzer_factory import get_journal_analyzer
+from app.ai.providers.nvidia_journal_analyzer import NvidiaJournalAnalyzer
 from app.core.config import settings
 
+def test_factory_returns_nvidia_analyzer(monkeypatch):
+    monkeypatch.setattr(
+        settings,
+        "journal_analyzer_provider",
+        "nvidia",
+    )
 
+    analyzer = get_journal_analyzer()
+
+    assert isinstance(analyzer, NvidiaJournalAnalyzer)
+    assert analyzer.provider == "nvidia"
+    assert analyzer.model_name == settings.nvidia_nim_model
+    
 def test_factory_returns_keyword_analyzer(monkeypatch):
     monkeypatch.setattr(
         settings,
