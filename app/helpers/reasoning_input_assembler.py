@@ -29,7 +29,10 @@ from app.db.models.user_coping_style import UserCopingStyle
 from app.db.repositories.user_coping_style_repository import (
     get_user_coping_style_by_user_id,
 )
-
+from app.db.models.life_event import LifeEvent
+from app.db.repositories.life_event_repository import (
+    list_reasoning_life_events_by_user_id,
+)
 """
 Technical helper.
 
@@ -53,13 +56,14 @@ Used by:
 class ReasoningInputs:
     profile: UserProfile | None
     user_context: UserContext | None
+    coping_style: UserCopingStyle | None
+    life_events: list[LifeEvent]
     current_state: CurrentEmotionalState | None
     latest_insights: list[BasicInsight]
     latest_patterns: list[PatternDetection]
     active_actions: list[ActionSuggestion]
     latest_feedback: list[UserFeedback]
     open_safety_events: list[SafetyEvent]
-    coping_style: UserCopingStyle | None
 
 
 def assemble_reasoning_inputs(
@@ -73,7 +77,10 @@ def assemble_reasoning_inputs(
         db=db,
         user_id=user_id,
     )
-
+    life_events = list_reasoning_life_events_by_user_id(
+    db=db,
+    user_id=user_id,
+    )
     patterns = list_pattern_detections_by_user_id(
         db=db,
         user_id=user_id,
@@ -116,4 +123,5 @@ def assemble_reasoning_inputs(
             db=db,
             user_id=user_id,
         ),
+        life_events=life_events,
     )

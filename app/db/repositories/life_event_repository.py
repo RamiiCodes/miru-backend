@@ -144,3 +144,25 @@ def dismiss_life_event(
     db.refresh(life_event)
 
     return life_event
+
+def list_reasoning_life_events_by_user_id(
+    db: Session,
+    user_id: UUID,
+    limit: int = 10,
+) -> list[LifeEvent]:
+    return (
+        db.query(LifeEvent)
+        .filter(LifeEvent.user_id == user_id)
+        .filter(LifeEvent.is_active.is_(True))
+        .filter(
+            LifeEvent.confirmation_status.in_(
+                ["confirmed", "partially_confirmed"]
+            )
+        )
+        .order_by(
+            LifeEvent.event_date.desc().nullslast(),
+            LifeEvent.created_at.desc(),
+        )
+        .limit(limit)
+        .all()
+    )
