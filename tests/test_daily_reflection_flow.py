@@ -71,6 +71,26 @@ def _create_duplicate_action_suggestions(db_session, *, user_id) -> None:
         )
 
 
+def _create_life_event(client, headers: dict[str, str]) -> dict:
+    response = client.post(
+        "/life-events",
+        json={
+            "category": "career",
+            "event_type": "job_loss",
+            "title": "Lost first engineering job",
+            "description": "Company downsized after eight months.",
+            "emotional_impact": 9,
+            "event_date": "2022-11-15T00:00:00Z",
+            "event_date_precision": "day",
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+
+    return response.json()
+
+
 def test_generate_daily_reflection_from_existing_state_insights_and_actions(client):
     headers = _auth_headers(client)
 
@@ -121,6 +141,27 @@ def test_generate_daily_reflection_from_existing_state_insights_and_actions(clie
     assert len(reflection["source_snapshot_json"]["action_ids"]) >= 1
 
     assert reflection["model_version"] == "daily_reflection_v0_1"
+
+
+def test_daily_reflection_includes_life_event_context(client):
+    headers = _auth_headers(client, email="daily-life-event@example.com")
+
+    _create_checkin(client, headers)
+    life_event = _create_life_event(client, headers)
+
+    reflection_response = client.post(
+        "/daily-reflections/generate",
+        headers=headers,
+    )
+
+    assert reflection_response.status_code == 200
+
+    reflection = reflection_response.json()
+
+    assert "Important life context is available" in reflection["summary"]
+    assert "Lost first engineering job" in reflection["summary"]
+    assert reflection["source_snapshot_json"]["life_events_available"] is True
+    assert reflection["source_snapshot_json"]["life_event_ids"] == [life_event["id"]]
 
 
 def test_daily_reflection_action_summary_does_not_duplicate_same_action(

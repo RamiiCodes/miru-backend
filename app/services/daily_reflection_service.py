@@ -91,6 +91,18 @@ def _build_daily_user_context_summary(user_context: UserContext | None) -> str:
     return "Context note: " + " ".join(context_parts)
 
 
+def _build_life_event_daily_note(life_events) -> str | None:
+    if not life_events:
+        return None
+
+    selected_event = life_events[0]
+
+    return (
+        "Important life context is available: "
+        f"{selected_event.title}. Keep today's reflection gentle and avoid over-interpreting."
+    )
+
+
 def _deduplicate_actions_by_code(actions):
     unique_actions = []
     seen_action_codes = set()
@@ -157,6 +169,9 @@ def generate_daily_reflection_for_user(
     user_context_summary = _build_daily_user_context_summary(
         reasoning_inputs.user_context,
     )
+    life_event_note = _build_life_event_daily_note(
+        reasoning_inputs.life_events,
+    )
 
     if latest_insights:
         insight_titles = [insight.title for insight in latest_insights[:3]]
@@ -200,19 +215,34 @@ def generate_daily_reflection_for_user(
     else:
         title = "Today’s reflection"
 
-    summary = (
-        f"{emotional_state_summary} "
-        f"{user_context_summary} "
-        f"{insight_summary} "
-        f"{pattern_summary} "
-        f"{action_summary}"
+    summary_parts = [
+        emotional_state_summary,
+        user_context_summary,
+    ]
+
+    if life_event_note is not None:
+        summary_parts.append(life_event_note)
+
+    summary_parts.extend(
+        [
+            insight_summary,
+            pattern_summary,
+            action_summary,
+        ]
     )
+
+    summary = " ".join(summary_parts)
 
     source_snapshot_json = {
         "state_id": str(state.id) if state else None,
         "insight_ids": [str(insight.id) for insight in latest_insights],
         "pattern_ids": [str(pattern.id) for pattern in latest_patterns],
         "action_ids": [str(action.id) for action in top_actions],
+        "life_events_available": len(reasoning_inputs.life_events) > 0,
+        "life_event_ids": [
+            str(event.id)
+            for event in reasoning_inputs.life_events
+        ],
         "user_context_available": reasoning_inputs.user_context is not None,
         "user_context_user_id": (
             str(reasoning_inputs.user_context.user_id)

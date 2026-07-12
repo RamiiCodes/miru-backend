@@ -32,6 +32,26 @@ def _create_safety_journal(client, headers: dict[str, str]) -> dict:
     return response.json()
 
 
+def _create_life_event(client, headers: dict[str, str]) -> dict:
+    response = client.post(
+        "/life-events",
+        json={
+            "category": "health",
+            "event_type": "major_health_event",
+            "title": "Recent health scare",
+            "description": "A recent health scare is affecting daily life.",
+            "emotional_impact": 8,
+            "event_date": "2026-07-12T00:00:00Z",
+            "event_date_precision": "day",
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+
+    return response.json()
+
+
 def test_safety_event_created_from_journal_safety_flag(client):
     headers = _auth_headers(client)
 
@@ -190,3 +210,24 @@ def test_reflection_response_prioritizes_open_safety_event(client):
     assert "not a crisis service" in reflection["message"]
     assert "severe_distress" in reflection["source_snapshot_json"]["safety_flag_types"]
     assert len(reflection["source_snapshot_json"]["safety_event_ids"]) == 1
+
+
+def test_safety_reflection_snapshot_includes_life_event_context(client):
+    headers = _auth_headers(client, email="safety-life-event@example.com")
+
+    life_event = _create_life_event(client, headers)
+    _create_safety_journal(client, headers)
+
+    response = client.post(
+        "/reflection-responses/generate",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    reflection = response.json()
+
+    assert reflection["title"] == "Safety check-in"
+    assert "Recent health scare" in reflection["message"]
+    assert reflection["source_snapshot_json"]["life_events_available"] is True
+    assert reflection["source_snapshot_json"]["life_event_ids"] == [life_event["id"]]

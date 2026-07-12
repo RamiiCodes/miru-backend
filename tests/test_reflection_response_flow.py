@@ -74,6 +74,26 @@ def _create_context(client, headers: dict[str, str]) -> None:
     assert actions_response.status_code == 200
 
 
+def _create_life_event(client, headers: dict[str, str]) -> dict:
+    response = client.post(
+        "/life-events",
+        json={
+            "category": "family",
+            "event_type": "bereavement",
+            "title": "Death of my father",
+            "description": "My father passed away recently.",
+            "emotional_impact": 9,
+            "event_date": "2026-07-12T00:00:00Z",
+            "event_date_precision": "day",
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+
+    return response.json()
+
+
 def test_generate_reflection_response_from_current_context(client):
     headers = _auth_headers(client)
 
@@ -106,6 +126,28 @@ def test_generate_reflection_response_from_current_context(client):
     assert "not a diagnosis" in reflection["message"]
     assert reflection["source_snapshot_json"]["state_id"] is not None
     assert len(reflection["source_snapshot_json"]["insight_ids"]) >= 1
+
+
+def test_reflection_response_includes_life_event_context(client):
+    headers = _auth_headers(client, email="reflection-life-event@example.com")
+
+    _create_profile(client, headers, style="gentle")
+    _create_context(client, headers)
+    life_event = _create_life_event(client, headers)
+
+    response = client.post(
+        "/reflection-responses/generate",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    reflection = response.json()
+
+    assert "Life context note" in reflection["message"]
+    assert "Death of my father" in reflection["message"]
+    assert reflection["source_snapshot_json"]["life_events_available"] is True
+    assert reflection["source_snapshot_json"]["life_event_ids"] == [life_event["id"]]
 
 
 def test_get_latest_reflection_response(client):

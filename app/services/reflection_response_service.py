@@ -20,6 +20,27 @@ PRIORITY_ORDER = {
     "low": 1,
 }
 
+def _build_life_event_note(life_events) -> str | None:
+    if not life_events:
+        return None
+
+    high_impact_events = [
+        event
+        for event in life_events
+        if (
+            event.emotional_impact is not None
+            and event.emotional_impact >= 7
+        )
+        or event.category in ["family", "trauma", "health"]
+    ]
+
+    selected_event = high_impact_events[0] if high_impact_events else life_events[0]
+
+    return (
+        "Life context note: The user has confirmed an important life event: "
+        f"{selected_event.title}. Use this only as gentle context. "
+        "Do not make causal claims or diagnoses."
+    )
 
 def _level_label(value: float | None) -> str:
     if value is None:
@@ -141,6 +162,7 @@ def _build_user_context_note(user_context: UserContext | None) -> str:
 def _build_safety_first_message(
     tone: str,
     flag_types: list[str],
+    life_event_note: str | None,
 ) -> str:
     if tone == "direct":
         opening = (
@@ -161,7 +183,7 @@ def _build_safety_first_message(
 
     flags_text = ", ".join(flag_types)
 
-    return (
+    message = (
         f"{opening} "
         f"Detected safety signal(s): {flags_text}. "
         "Miru is not a crisis service and this is not a diagnosis. "
@@ -169,6 +191,11 @@ def _build_safety_first_message(
         "For now, the safest next step is to pause, avoid staying alone with the situation if possible, "
         "and seek real human support."
     )
+
+    if life_event_note is not None:
+        message = f"{message} {life_event_note}"
+
+    return message
 
 
 def _build_message(
@@ -182,6 +209,7 @@ def _build_message(
     pattern_titles: list[str],
     top_action: ActionSuggestion | None,
     user_context_note: str,
+    life_event_note: str | None,
 ) -> str:
     stress_label = _level_label(stress_level)
     energy_label = _level_label(energy_level)
@@ -237,10 +265,15 @@ def _build_message(
 
     safety_sentence = "This is a reflection, not a diagnosis or medical advice."
 
+    context_parts = [user_context_note]
+
+    if life_event_note is not None:
+        context_parts.append(life_event_note)
+
     parts = [
         opening,
         state_sentence,
-        user_context_note,
+        *context_parts,
         *extra_state_notes,
         insight_sentence,
         pattern_sentence,
@@ -265,6 +298,9 @@ def generate_reflection_response_for_user(
 
     state = reasoning_inputs.current_state
     tone = _select_tone(reasoning_inputs)
+    life_event_note = _build_life_event_note(
+        reasoning_inputs.life_events,
+    )
 
     if reasoning_inputs.open_safety_events:
         flag_types = sorted(
@@ -283,6 +319,7 @@ def generate_reflection_response_for_user(
             message=_build_safety_first_message(
                 tone=tone,
                 flag_types=flag_types,
+                life_event_note=life_event_note,
             ),
             tone=tone,
             response_type="gentle_checkin",
@@ -293,6 +330,11 @@ def generate_reflection_response_for_user(
                     for event in reasoning_inputs.open_safety_events
                 ],
                 "safety_flag_types": flag_types,
+                "life_event_ids": [
+                    str(event.id)
+                    for event in reasoning_inputs.life_events
+                ],
+                "life_events_available": len(reasoning_inputs.life_events) > 0,
                 "user_context_available": reasoning_inputs.user_context is not None,
                 "tone_source": tone,
                 "coping_style_available": reasoning_inputs.coping_style is not None,
@@ -331,6 +373,7 @@ def generate_reflection_response_for_user(
         pattern_titles=pattern_titles,
         top_action=top_action,
         user_context_note=_build_user_context_note(reasoning_inputs.user_context),
+        life_event_note=life_event_note,
     )
 
     if top_action is not None:
@@ -348,6 +391,11 @@ def generate_reflection_response_for_user(
         "insight_ids": [str(insight.id) for insight in latest_insights],
         "pattern_ids": [str(pattern.id) for pattern in latest_patterns],
         "suggested_action_id": str(top_action.id) if top_action else None,
+        "life_event_ids": [
+            str(event.id)
+            for event in reasoning_inputs.life_events
+        ],
+        "life_events_available": len(reasoning_inputs.life_events) > 0,
         "user_context_available": reasoning_inputs.user_context is not None,
         "user_context_user_id": (
             str(reasoning_inputs.user_context.user_id)
