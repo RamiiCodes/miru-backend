@@ -9,7 +9,7 @@ from app.db.repositories.journal_semantic_frame_repository import (
     get_journal_semantic_frame_by_user_id_and_id,
     list_journal_semantic_frames_by_user_id,
 )
-
+from app.services.semantic_frame_normalizer import normalize_semantic_frame
 
 def create_semantic_frame_from_analysis_result(
     db: Session,
@@ -23,34 +23,28 @@ def create_semantic_frame_from_analysis_result(
     if semantic_frame is None:
         return None
 
+    normalized_semantic_frame = normalize_semantic_frame(
+    semantic_frame=semantic_frame,
+)
     return create_journal_semantic_frame(
-        db=db,
-        user_id=user_id,
-        journal_entry_id=journal_entry_id,
-        journal_analysis_id=journal_analysis_id,
-        provider=analysis_result.provider,
-        model_name=analysis_result.model_name,
-        prompt_version=analysis_result.prompt_version,
-        core_dimensions_json={
-            key: value.model_dump(mode="json")
-            for key, value in semantic_frame.core_dimensions.items()
-        },
-        emotion_labels_json=semantic_frame.emotion_labels,
-        semantic_tags_json=semantic_frame.semantic_tags,
-        life_domains_json=semantic_frame.life_domains,
-        needs_json=semantic_frame.needs,
-        additional_dimensions_json=[
-            dimension.model_dump(mode="json")
-            for dimension in semantic_frame.additional_dimensions
-        ],
-        event_candidates_json=[
-            candidate.model_dump(mode="json")
-            for candidate in semantic_frame.event_candidates
-        ],
-        safety_flags_json=semantic_frame.safety_flags,
-        overall_confidence=semantic_frame.overall_confidence,
-        raw_output_json=semantic_frame.raw_output,
-    )
+    db=db,
+    user_id=user_id,
+    journal_entry_id=journal_entry_id,
+    journal_analysis_id=journal_analysis_id,
+    provider=analysis_result.provider,
+    model_name=analysis_result.model_name,
+    prompt_version=analysis_result.prompt_version,
+    core_dimensions_json=normalized_semantic_frame.core_dimensions_json,
+    emotion_labels_json=normalized_semantic_frame.emotion_labels_json,
+    semantic_tags_json=normalized_semantic_frame.semantic_tags_json,
+    life_domains_json=normalized_semantic_frame.life_domains_json,
+    needs_json=normalized_semantic_frame.needs_json,
+    additional_dimensions_json=normalized_semantic_frame.additional_dimensions_json,
+    event_candidates_json=normalized_semantic_frame.event_candidates_json,
+    safety_flags_json=normalized_semantic_frame.safety_flags_json,
+    overall_confidence=normalized_semantic_frame.overall_confidence,
+    raw_output_json=normalized_semantic_frame.raw_output_json,
+)
 
 
 def list_user_journal_semantic_frames(
