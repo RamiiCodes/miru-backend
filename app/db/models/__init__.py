@@ -19,6 +19,7 @@ from app.db.models.journal_analysis import JournalAnalysis
 from app.db.models.journal_extracted_signal import JournalExtractedSignal
 from app.db.models.life_event import LifeEvent
 from app.db.models.user_goal import UserGoal
+from app.db.models.journal_semantic_frame import JournalSemanticFrame
 
 __all__ = [
     "User",
@@ -42,4 +43,5 @@ __all__ = [
     "JournalExtractedSignal",
     "LifeEvent",
     "UserGoal",
+    "JournalSemanticFrame",
 ]
