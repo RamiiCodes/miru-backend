@@ -8,14 +8,18 @@ import httpx
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
 
-from app.ai.journal_analyzer import (
-    DetectedJournalSignal,
-    JournalAnalysisResult,
-    LifeEventCandidate,
-)
 from app.ai.providers.keyword_journal_analyzer import KeywordJournalAnalyzer
 from app.core.config import settings
-from app.ai.semantic_frame_builder import build_semantic_frame_from_legacy_analysis
+
+from app.ai.journal_analyzer import (
+    AdditionalSemanticDimensionResult,
+    DetectedJournalSignal,
+    JournalAnalysisResult,
+    JournalSemanticFrameResult,
+    LifeEventCandidate,
+    SemanticDimensionResult,
+    SemanticEventCandidateResult,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +183,41 @@ def _normalize_life_event_candidate(candidate: dict) -> dict:
         ),
         "evidence": candidate.get("evidence") or candidate.get("quote"),
     }
+class NvidiaSemanticDimension(BaseModel):
+    value: float = Field(ge=0, le=1)
+    confidence: float = Field(ge=0, le=1)
+    evidence: str | None = None
+    reason: str | None = None
+
+
+class NvidiaCoreDimensions(BaseModel):
+    valence: NvidiaSemanticDimension | None = None
+    arousal: NvidiaSemanticDimension | None = None
+    threat: NvidiaSemanticDimension | None = None
+    control: NvidiaSemanticDimension | None = None
+    social_connection: NvidiaSemanticDimension | None = None
+    uncertainty: NvidiaSemanticDimension | None = None
+    self_evaluation: NvidiaSemanticDimension | None = None
+    energy: NvidiaSemanticDimension | None = None
+
+
+class NvidiaAdditionalSemanticDimension(NvidiaSemanticDimension):
+    name: str
+
+
+class NvidiaSemanticEventCandidate(BaseModel):
+    category: str | None = None
+    event_type: str
+    title: str | None = None
+    description: str | None = None
+    significance: float | None = Field(default=None, ge=0, le=1)
+    valence: float | None = Field(default=None, ge=0, le=1)
+    confidence: float = Field(ge=0, le=1)
+    evidence: str | None = None
+    semantic_tags: list[str] = Field(default_factory=list)
+    life_domains: list[str] = Field(default_factory=list)
 class NvidiaExtractionPayload(BaseModel):
+    # Legacy compatibility fields.
     detected_signals: list[DetectedJournalSignal] = Field(default_factory=list)
     safety_flags: list[str] = Field(default_factory=list)
     themes: list[str] = Field(default_factory=list)
@@ -187,6 +225,18 @@ class NvidiaExtractionPayload(BaseModel):
     emotional_tone: str | None = None
     summary: str | None = None
     language: str | None = None
+
+    # New generic semantic frame fields.
+    core_dimensions: NvidiaCoreDimensions = Field(default_factory=NvidiaCoreDimensions)
+    emotion_labels: list[str] = Field(default_factory=list)
+    semantic_tags: list[str] = Field(default_factory=list)
+    life_domains: list[str] = Field(default_factory=list)
+    needs: list[str] = Field(default_factory=list)
+    additional_dimensions: list[NvidiaAdditionalSemanticDimension] = Field(
+        default_factory=list
+    )
+    event_candidates: list[NvidiaSemanticEventCandidate] = Field(default_factory=list)
+    overall_confidence: float | None = Field(default=None, ge=0, le=1)
 
     @model_validator(mode="before")
     @classmethod
@@ -222,6 +272,142 @@ class NvidiaExtractionPayload(BaseModel):
 class NvidiaJournalAnalyzer:
     provider = "nvidia"
     prompt_version = "journal_signal_extraction_nvidia_v0_1"
+
+    def _build_semantic_frame_from_payload(
+        self,
+        parsed_payload: NvidiaExtractionPayload,
+        safety_flags: list[str],
+    ) -> JournalSemanticFrameResult:
+        core_dimensions: dict[str, SemanticDimensionResult] = {}
+
+        for dimension_name in [
+            "valence",
+            "arousal",
+            "threat",
+            "control",
+            "social_connection",
+            "uncertainty",
+            "self_evaluation",
+            "energy",
+        ]:
+            dimension = getattr(
+                parsed_payload.core_dimensions,
+                dimension_name,
+            )
+
+            if dimension is None:
+                continue
+
+            core_dimensions[dimension_name] = SemanticDimensionResult(
+                value=dimension.value,
+                confidence=dimension.confidence,
+                evidence=dimension.evidence,
+                reason=dimension.reason,
+            )
+
+        additional_dimensions = [
+            AdditionalSemanticDimensionResult(
+                name=dimension.name,
+                value=dimension.value,
+                confidence=dimension.confidence,
+                evidence=dimension.evidence,
+                reason=dimension.reason,
+            )
+            for dimension in parsed_payload.additional_dimensions
+        ]
+
+        event_candidates = [
+            SemanticEventCandidateResult(
+                category=candidate.category,
+                event_type=candidate.event_type,
+                title=candidate.title,
+                description=candidate.description,
+                significance=candidate.significance,
+                valence=candidate.valence,
+                confidence=candidate.confidence,
+                evidence=candidate.evidence,
+                semantic_tags=self._normalize_string_list(candidate.semantic_tags),
+                life_domains=self._normalize_string_list(candidate.life_domains),
+            )
+            for candidate in parsed_payload.event_candidates
+        ]
+
+        return JournalSemanticFrameResult(
+            core_dimensions=core_dimensions,
+            emotion_labels=self._normalize_string_list(parsed_payload.emotion_labels),
+            semantic_tags=self._normalize_string_list(parsed_payload.semantic_tags),
+            life_domains=self._normalize_string_list(parsed_payload.life_domains),
+            needs=self._normalize_string_list(parsed_payload.needs),
+            additional_dimensions=additional_dimensions,
+            event_candidates=event_candidates,
+            safety_flags=safety_flags,
+            overall_confidence=parsed_payload.overall_confidence,
+            raw_output={
+                "source": "nvidia_direct_semantic_extraction",
+                "provider": self.provider,
+                "model_name": self.model_name,
+                "prompt_version": self.prompt_version,
+            },
+        )
+
+    def _normalize_string_list(
+        self,
+        values: list[str],
+    ) -> list[str]:
+        normalized_values: list[str] = []
+        seen_values: set[str] = set()
+
+        for value in values:
+            normalized_value = value.strip().lower().replace(" ", "_")
+
+            if not normalized_value:
+                continue
+
+            if normalized_value in seen_values:
+                continue
+
+            seen_values.add(normalized_value)
+            normalized_values.append(normalized_value)
+
+        return normalized_values
+
+    def _legacy_life_event_candidates_from_semantic_events(
+        self,
+        event_candidates: list[NvidiaSemanticEventCandidate],
+    ) -> list[LifeEventCandidate]:
+        legacy_candidates: list[LifeEventCandidate] = []
+
+        for candidate in event_candidates:
+            legacy_candidates.append(
+                LifeEventCandidate(
+                    event_type=candidate.event_type,
+                    description=(
+                        candidate.description
+                        or candidate.title
+                        or candidate.event_type.replace("_", " ").title()
+                    ),
+                    severity=self._severity_from_significance(candidate.significance),
+                    confidence=candidate.confidence,
+                    evidence=candidate.evidence,
+                )
+            )
+
+        return legacy_candidates
+
+    def _severity_from_significance(
+        self,
+        significance: float | None,
+    ) -> str:
+        if significance is None:
+            return "medium"
+
+        if significance >= 0.75:
+            return "high"
+
+        if significance >= 0.4:
+            return "medium"
+
+        return "low"
 
     def __init__(
         self,
@@ -276,27 +462,36 @@ class NvidiaJournalAnalyzer:
             )
 
             themes = self._merge_unique(
-            parsed_payload.themes,
-            self._themes_from_signals(detected_signals),
+                parsed_payload.semantic_tags,
+                self._merge_unique(
+                    parsed_payload.themes,
+                    self._themes_from_signals(detected_signals),
+                ),
             )
 
             emotional_tone = parsed_payload.emotional_tone
 
+            if emotional_tone is None and parsed_payload.emotion_labels:
+                emotional_tone = ", ".join(parsed_payload.emotion_labels)
+
             if emotional_tone is None and themes:
                 emotional_tone = ", ".join(themes)
 
+            legacy_life_event_candidates = list(parsed_payload.life_event_candidates)
+
+            if not legacy_life_event_candidates and parsed_payload.event_candidates:
+                legacy_life_event_candidates = (
+                    self._legacy_life_event_candidates_from_semantic_events(
+                        parsed_payload.event_candidates
+                    )
+                )
+
             life_event_candidates = self._filter_life_event_candidates(
-                parsed_payload.life_event_candidates
+                legacy_life_event_candidates
             )
-            semantic_frame = build_semantic_frame_from_legacy_analysis(
-                detected_signals=detected_signals,
+            semantic_frame = self._build_semantic_frame_from_payload(
+                parsed_payload=parsed_payload,
                 safety_flags=safety_flags,
-                themes=themes,
-                life_event_candidates=life_event_candidates,
-                emotional_tone=emotional_tone,
-                provider=self.provider,
-                model_name=self.model_name,
-                prompt_version=self.prompt_version,
             )
 
             self._debug_log(
@@ -327,6 +522,7 @@ class NvidiaJournalAnalyzer:
                     "model_name": self.model_name,
                     "prompt_version": self.prompt_version,
                     "llm_payload": parsed_payload.model_dump(mode="json"),
+                    "semantic_frame": semantic_frame.model_dump(mode="json"),
                     "safety_flags_after_keyword_merge": safety_flags,
                 },
                 semantic_frame=semantic_frame,
@@ -408,48 +604,80 @@ class NvidiaJournalAnalyzer:
                 "Unexpected NVIDIA response format."
             ) from exc
 
-    def _build_messages(self, content: str) -> list[dict[str, str]]:
+    def _build_messages(
+        self,
+        content: str,
+    ) -> list[dict[str, str]]:
+        system_message = (
+            "You are Miru's semantic journal extraction component. "
+            "Your task is to extract structured meaning from a user's journal entry. "
+            "You are not a therapist. Do not diagnose. Do not recommend actions. "
+            "Do not give advice. Return JSON only."
+        )
+
+        user_message = (
+            "Extract both legacy compatibility fields and a generic semantic frame.\n\n"
+            "Important architecture rule:\n"
+            "- The LLM is a flexible semantic interpreter.\n"
+            "- The backend is responsible for validation, scoring, safety, memory, and personalization.\n"
+            "- Do not decide final recommendations.\n\n"
+            "Do not force the user's experience into predefined emotion labels. "
+            "Use open-ended emotion_labels, semantic_tags, life_domains, and needs when needed.\n\n"
+            "Always provide core_dimensions when there is enough evidence. "
+            "If there is not enough evidence for a dimension, leave that dimension null.\n\n"
+            "Core dimensions use values from 0 to 1:\n"
+            "- valence: negative to positive emotional tone\n"
+            "- arousal: calm/deactivated to activated/intense\n"
+            "- threat: felt danger, pressure, alarm, or risk\n"
+            "- control: sense of agency and ability to act\n"
+            "- social_connection: isolation/rejection to connection/support\n"
+            "- uncertainty: clarity/certainty to uncertainty/confusion\n"
+            "- self_evaluation: self-criticism/shame to self-acceptance/pride\n"
+            "- energy: depleted to energized\n\n"
+            "For every provided core dimension, include:\n"
+            '{ "value": number, "confidence": number, "evidence": string|null, "reason": string|null }\n\n'
+            "Open-ended fields:\n"
+            "- emotion_labels: natural labels such as happy, anxious, numb, conflicted, relieved\n"
+            "- semantic_tags: snake_case tags such as mixed_emotion, major_transition, low_clarity\n"
+            "- life_domains: domains such as relationship, career, family, health, identity, future_planning\n"
+            "- needs: inferred needs such as grounding, connection, celebration, clarity, rest, support\n"
+            "- additional_dimensions: extra dimensions only when the core dimensions do not capture something important\n\n"
+            "Event candidates:\n"
+            "- Use event_candidates for meaningful factual life events only.\n"
+            "- event_type is open-ended. Do not restrict it to a predefined list.\n"
+            "- category should be broad, for example: family, relationship, career, education, health, financial, relocation, legal, trauma, achievement, personal_growth, other.\n"
+            "- Do not create an event candidate for a passing emotion like 'I felt anxious today'.\n\n"
+            "Legacy compatibility fields:\n"
+            "- detected_signals may use existing known signal codes if clearly applicable.\n"
+            "- themes may summarize important recurring themes.\n"
+            "- life_event_candidates may be filled for backward compatibility, but event_candidates is the preferred new field.\n\n"
+            "Allowed legacy detected signal codes:\n"
+            "- rumination_tendency\n"
+            "- self_criticism\n"
+            "- fear_of_failure\n"
+            "- work_sensitivity\n"
+            "- grief_loss\n"
+            "- emotional_numbness\n"
+            "- disorientation\n"
+            "- loneliness\n"
+            "- overwhelm\n\n"
+            "Allowed safety flags:\n"
+            "- self_harm_risk\n"
+            "- harm_to_others_risk\n"
+            "- abuse_or_coercion_context\n"
+            "- severe_distress\n\n"
+            "Journal entry:\n"
+            f"{content}"
+        )
+
         return [
             {
                 "role": "system",
-                "content": (
-                    "You are Miru's structured journal extraction system.\n"
-                    "You extract emotional and cognitive signals from journal text.\n"
-                    "You must return structured JSON only.\n"
-                    "Do not generate advice.\n"
-                    "Do not generate recommendations.\n"
-                    "Do not generate therapy-like reflections.\n"
-                    "Do not diagnose the user.\n"
-                    "Use cautious language.\n"
-                    "Only extract what is grounded in the user's text.\n"
-                ),
+                "content": system_message,
             },
             {
                 "role": "user",
-                "content": (
-                    "Analyze the following journal entry and return JSON matching the schema.\n\n"
-                    "Allowed detected signal codes:\n"
-                    f"{', '.join(ALLOWED_JOURNAL_SIGNAL_CODES)}\n\n"
-                    "Allowed safety flags:\n"
-                    f"{', '.join(ALLOWED_SAFETY_FLAGS)}\n\n"
-                    "Allowed life event severities:\n"
-                    f"{', '.join(ALLOWED_LIFE_EVENT_SEVERITIES)}\n\n"
-                    "Rules:\n"
-                    "- detected_signals must use only allowed signal_code values.\n"
-                    "- value must be between 0 and 1.\n"
-                    "- confidence must be between 0 and 1.\n"
-                    "- evidence should quote or closely reference the user's wording.\n"
-                    "- safety_flags must use only allowed values.\n"
-                    "- life_event_candidates should be used only for meaningful life events.\n"
-                    "- themes should be short snake_case labels.\n"
-                    "- summary must be short and descriptive, not advice.\n"
-                    "- If uncertain, lower confidence instead of inventing.\n\n"
-                    "life_event_candidates must use this exact object shape:\n"
-                    "{\"event_type\": \"bereavement\", \"description\": \"Death of someone close\", \"severity\": \"high\", \"confidence\": 0.8, \"evidence\": \"quoted text\"}\n\n"
-                    "Do not use keys like event, type, score, or probability. Use the exact schema keys.\n\n"
-                    "Journal entry:\n"
-                    f"{content}"
-                ),
+                "content": user_message,
             },
         ]
 
