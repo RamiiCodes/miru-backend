@@ -103,6 +103,18 @@ def _build_life_event_daily_note(life_events) -> str | None:
     )
 
 
+def _build_user_goal_daily_note(user_goals) -> str | None:
+    if not user_goals:
+        return None
+
+    selected_goal = user_goals[0]
+
+    return (
+        "Active goal context is available: "
+        f"{selected_goal.title}. Keep today's reflection aligned but gentle."
+    )
+
+
 def _deduplicate_actions_by_code(actions):
     unique_actions = []
     seen_action_codes = set()
@@ -172,6 +184,9 @@ def generate_daily_reflection_for_user(
     life_event_note = _build_life_event_daily_note(
         reasoning_inputs.life_events,
     )
+    user_goal_note = _build_user_goal_daily_note(
+        reasoning_inputs.user_goals,
+    )
 
     if latest_insights:
         insight_titles = [insight.title for insight in latest_insights[:3]]
@@ -223,6 +238,9 @@ def generate_daily_reflection_for_user(
     if life_event_note is not None:
         summary_parts.append(life_event_note)
 
+    if user_goal_note is not None:
+        summary_parts.append(user_goal_note)
+
     summary_parts.extend(
         [
             insight_summary,
@@ -242,6 +260,11 @@ def generate_daily_reflection_for_user(
         "life_event_ids": [
             str(event.id)
             for event in reasoning_inputs.life_events
+        ],
+        "user_goals_available": len(reasoning_inputs.user_goals) > 0,
+        "user_goal_ids": [
+            str(goal.id)
+            for goal in reasoning_inputs.user_goals
         ],
         "user_context_available": reasoning_inputs.user_context is not None,
         "user_context_user_id": (

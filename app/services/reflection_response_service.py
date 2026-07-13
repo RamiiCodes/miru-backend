@@ -20,6 +20,20 @@ PRIORITY_ORDER = {
     "low": 1,
 }
 
+
+def _build_user_goal_note(user_goals) -> str | None:
+    if not user_goals:
+        return None
+
+    selected_goal = user_goals[0]
+
+    return (
+        "Goal context note: The user has an active goal: "
+        f"{selected_goal.title}. Use this only as gentle context. "
+        "Do not pressure the user or over-focus on productivity."
+    )
+
+
 def _build_life_event_note(life_events) -> str | None:
     if not life_events:
         return None
@@ -163,6 +177,7 @@ def _build_safety_first_message(
     tone: str,
     flag_types: list[str],
     life_event_note: str | None,
+    user_goal_note: str | None,
 ) -> str:
     if tone == "direct":
         opening = (
@@ -195,6 +210,9 @@ def _build_safety_first_message(
     if life_event_note is not None:
         message = f"{message} {life_event_note}"
 
+    if user_goal_note is not None:
+        message = f"{message} {user_goal_note}"
+
     return message
 
 
@@ -210,6 +228,7 @@ def _build_message(
     top_action: ActionSuggestion | None,
     user_context_note: str,
     life_event_note: str | None,
+    user_goal_note: str | None,
 ) -> str:
     stress_label = _level_label(stress_level)
     energy_label = _level_label(energy_level)
@@ -270,6 +289,9 @@ def _build_message(
     if life_event_note is not None:
         context_parts.append(life_event_note)
 
+    if user_goal_note is not None:
+        context_parts.append(user_goal_note)
+
     parts = [
         opening,
         state_sentence,
@@ -301,6 +323,9 @@ def generate_reflection_response_for_user(
     life_event_note = _build_life_event_note(
         reasoning_inputs.life_events,
     )
+    user_goal_note = _build_user_goal_note(
+        reasoning_inputs.user_goals,
+    )
 
     if reasoning_inputs.open_safety_events:
         flag_types = sorted(
@@ -320,6 +345,7 @@ def generate_reflection_response_for_user(
                 tone=tone,
                 flag_types=flag_types,
                 life_event_note=life_event_note,
+                user_goal_note=user_goal_note,
             ),
             tone=tone,
             response_type="gentle_checkin",
@@ -335,6 +361,11 @@ def generate_reflection_response_for_user(
                     for event in reasoning_inputs.life_events
                 ],
                 "life_events_available": len(reasoning_inputs.life_events) > 0,
+                "user_goals_available": len(reasoning_inputs.user_goals) > 0,
+                "user_goal_ids": [
+                    str(goal.id)
+                    for goal in reasoning_inputs.user_goals
+                ],
                 "user_context_available": reasoning_inputs.user_context is not None,
                 "tone_source": tone,
                 "coping_style_available": reasoning_inputs.coping_style is not None,
@@ -374,6 +405,7 @@ def generate_reflection_response_for_user(
         top_action=top_action,
         user_context_note=_build_user_context_note(reasoning_inputs.user_context),
         life_event_note=life_event_note,
+        user_goal_note=user_goal_note,
     )
 
     if top_action is not None:
@@ -396,6 +428,11 @@ def generate_reflection_response_for_user(
             for event in reasoning_inputs.life_events
         ],
         "life_events_available": len(reasoning_inputs.life_events) > 0,
+        "user_goals_available": len(reasoning_inputs.user_goals) > 0,
+        "user_goal_ids": [
+            str(goal.id)
+            for goal in reasoning_inputs.user_goals
+        ],
         "user_context_available": reasoning_inputs.user_context is not None,
         "user_context_user_id": (
             str(reasoning_inputs.user_context.user_id)
