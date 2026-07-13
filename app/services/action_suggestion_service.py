@@ -19,6 +19,27 @@ from app.helpers.coping_style_action_ranker import (
     adjust_priority_for_coping_style,
     calculate_coping_match_score,
 )
+from app.helpers.goal_action_ranker import apply_goal_adjustments
+from app.db.repositories.user_goal_repository import (
+    list_reasoning_user_goals_by_user_id,
+)
+
+
+PRIORITY_TO_GOAL_SCORE = {
+    "low": 3,
+    "medium": 5,
+    "high": 7,
+}
+
+
+def _priority_from_goal_score(priority_score: int) -> str:
+    if priority_score >= 7:
+        return "high"
+
+    if priority_score >= 4:
+        return "medium"
+
+    return "low"
 
 
 def _apply_coping_style_adjustments(
@@ -52,6 +73,11 @@ def generate_action_suggestions_for_user(
     state = get_latest_current_emotional_state(db=db, user_id=user_id)
     insights = list_basic_insights_by_user_id(db=db, user_id=user_id)
     patterns = list_pattern_detections_by_user_id(db=db, user_id=user_id)
+
+    user_goals = list_reasoning_user_goals_by_user_id(
+    db=db,
+    user_id=user_id,
+    )
 
     coping_style = get_user_coping_style_by_user_id(
         db=db,
@@ -287,10 +313,20 @@ def generate_action_suggestions_for_user(
     created_actions: list[ActionSuggestion] = []
 
     for action_data in actions_to_create:
+        goal_adjusted_priority, goal_adjusted_confidence = apply_goal_adjustments(
+            action_code=action_data["action_code"],
+            priority=PRIORITY_TO_GOAL_SCORE.get(action_data["priority"], 5),
+            confidence=action_data["confidence"],
+            user_goals=user_goals,
+        )
+        goal_adjusted_priority_label = _priority_from_goal_score(
+            goal_adjusted_priority,
+        )
+
         adjusted_priority, adjusted_confidence = _apply_coping_style_adjustments(
             action_code=action_data["action_code"],
-            priority=action_data["priority"],
-            confidence=action_data["confidence"],
+            priority=goal_adjusted_priority_label,
+            confidence=goal_adjusted_confidence,
             coping_style=coping_style,
         )
 
@@ -302,10 +338,10 @@ def generate_action_suggestions_for_user(
             description=action_data["description"],
             action_type=action_data["action_type"],
             priority=adjusted_priority,
+            confidence=adjusted_confidence,
             reason=action_data["reason"],
             source_type=action_data["source_type"],
             source_id=action_data["source_id"],
-            confidence=adjusted_confidence,
         )
 
         created_actions.append(created_action)
