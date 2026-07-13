@@ -33,6 +33,10 @@ from app.db.models.life_event import LifeEvent
 from app.db.repositories.life_event_repository import (
     list_reasoning_life_events_by_user_id,
 )
+from app.db.models.user_goal import UserGoal
+from app.db.repositories.user_goal_repository import (
+    list_reasoning_user_goals_by_user_id,
+)
 """
 Technical helper.
 
@@ -58,6 +62,7 @@ class ReasoningInputs:
     user_context: UserContext | None
     coping_style: UserCopingStyle | None
     life_events: list[LifeEvent]
+    user_goals: list[UserGoal]
     current_state: CurrentEmotionalState | None
     latest_insights: list[BasicInsight]
     latest_patterns: list[PatternDetection]
@@ -97,6 +102,10 @@ def assemble_reasoning_inputs(
         include_completed=False,
         include_dismissed=False,
     )
+    user_goals = list_reasoning_user_goals_by_user_id(
+    db=db,
+    user_id=user_id,
+)
 
     return ReasoningInputs(
         profile=get_user_profile_by_user_id(
@@ -124,4 +133,5 @@ def assemble_reasoning_inputs(
             user_id=user_id,
         ),
         life_events=life_events,
+        user_goals=user_goals,
     )

@@ -18,6 +18,7 @@ from app.db.models.user_coping_style import UserCopingStyle
 from app.db.models.journal_analysis import JournalAnalysis
 from app.db.models.journal_extracted_signal import JournalExtractedSignal
 from app.db.models.life_event import LifeEvent
+from app.db.models.user_goal import UserGoal
 
 __all__ = [
     "User",
@@ -40,4 +41,5 @@ __all__ = [
     "JournalAnalysis",
     "JournalExtractedSignal",
     "LifeEvent",
+    "UserGoal",
 ]
