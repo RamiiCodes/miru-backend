@@ -279,3 +279,126 @@ def test_nvidia_journal_analyzer_normalizes_imperfect_life_event_json(monkeypatc
     assert result.life_event_candidates[0].description == "loss of dead"
     assert result.life_event_candidates[0].severity == "high"
     assert result.life_event_candidates[0].confidence == 0.6
+
+
+def test_nvidia_journal_analyzer_returns_direct_semantic_frame(monkeypatch):
+    analyzer = NvidiaJournalAnalyzer(
+        api_key="fake-key",
+        model_name="mistralai/mistral-medium-3.5-128b",
+    )
+
+    def fake_call_nvidia(content: str) -> str:
+        return """
+        {
+          "detected_signals": [],
+          "safety_flags": [],
+          "themes": [],
+          "life_event_candidates": [],
+          "emotional_tone": "happy, excited",
+          "summary": "The user describes feeling happy after getting engaged.",
+          "language": "en",
+          "core_dimensions": {
+            "valence": {
+              "value": 0.95,
+              "confidence": 0.95,
+              "evidence": "I am so happy",
+              "reason": "The user directly says they are very happy."
+            },
+            "arousal": {
+              "value": 0.75,
+              "confidence": 0.8,
+              "evidence": "so happy",
+              "reason": "The wording suggests activated positive emotion."
+            },
+            "social_connection": {
+              "value": 0.95,
+              "confidence": 0.9,
+              "evidence": "I got engaged today",
+              "reason": "Engagement is a relationship milestone."
+            },
+            "threat": {
+              "value": 0.05,
+              "confidence": 0.7,
+              "evidence": null,
+              "reason": "No threat or danger is expressed."
+            }
+          },
+          "emotion_labels": ["happy", "excited"],
+          "semantic_tags": [
+            "positive_life_event",
+            "relationship_milestone",
+            "major_transition"
+          ],
+          "life_domains": ["relationship", "future_planning"],
+          "needs": ["celebration", "connection", "emotional_integration"],
+          "additional_dimensions": [
+            {
+              "name": "anticipation",
+              "value": 0.8,
+              "confidence": 0.75,
+              "evidence": "got engaged today",
+              "reason": "Engagement points toward future planning."
+            }
+          ],
+          "event_candidates": [
+            {
+              "category": "relationship",
+              "event_type": "engagement",
+              "title": "Got engaged",
+              "description": "The user got engaged today.",
+              "significance": 0.9,
+              "valence": 0.95,
+              "confidence": 0.95,
+              "evidence": "I got engaged today",
+              "semantic_tags": [
+                "relationship_milestone",
+                "major_transition"
+              ],
+              "life_domains": [
+                "relationship",
+                "future_planning"
+              ]
+            }
+          ],
+          "overall_confidence": 0.9
+        }
+        """
+
+    monkeypatch.setattr(
+        analyzer,
+        "_call_nvidia",
+        fake_call_nvidia,
+    )
+
+    result = analyzer.analyze(
+        "I am so happy, I got engaged today."
+    )
+
+    assert result.provider == "nvidia"
+    assert result.semantic_frame is not None
+
+    semantic_frame = result.semantic_frame
+
+    assert semantic_frame.core_dimensions["valence"].value == 0.95
+    assert semantic_frame.core_dimensions["social_connection"].value == 0.95
+
+    assert "happy" in semantic_frame.emotion_labels
+    assert "relationship_milestone" in semantic_frame.semantic_tags
+    assert "relationship" in semantic_frame.life_domains
+    assert "celebration" in semantic_frame.needs
+
+    assert semantic_frame.additional_dimensions
+    assert semantic_frame.additional_dimensions[0].name == "anticipation"
+
+    assert semantic_frame.event_candidates
+    assert semantic_frame.event_candidates[0].event_type == "engagement"
+    assert semantic_frame.event_candidates[0].category == "relationship"
+    assert semantic_frame.event_candidates[0].significance == 0.9
+
+    assert result.life_event_candidates
+    assert result.life_event_candidates[0].event_type == "engagement"
+    assert result.life_event_candidates[0].severity == "high"
+
+    assert result.raw_output["semantic_frame"]["raw_output"]["source"] == (
+        "nvidia_direct_semantic_extraction"
+    )
