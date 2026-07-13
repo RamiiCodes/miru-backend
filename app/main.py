@@ -21,6 +21,7 @@ from app.api.routes.user_coping_styles import router as user_coping_styles_route
 from app.api.routes.journal_analyses import router as journal_analyses_router
 from app.api.routes.life_events import router as life_events_router
 from app.api.routes.user_goals import router as user_goals_router
+from app.api.routes.journal_semantic_frames import router as journal_semantic_frames_router
 
 app = FastAPI(
     title="Miru API",
@@ -81,4 +82,10 @@ app.include_router(
     user_goals_router,
     prefix="/user-goals",
     tags=["User Goals"],
+)
+
+app.include_router(
+    journal_semantic_frames_router,
+    prefix="/journal-semantic-frames",
+    tags=["Journal Semantic Frames"],
 )

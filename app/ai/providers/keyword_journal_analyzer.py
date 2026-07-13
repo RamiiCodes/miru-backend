@@ -3,7 +3,7 @@ from app.ai.journal_analyzer import (
     JournalAnalysisResult,
     LifeEventCandidate,
 )
-
+from app.ai.semantic_frame_builder import build_semantic_frame_from_legacy_analysis
 
 class KeywordJournalAnalyzer:
     provider = "keyword"
@@ -136,43 +136,63 @@ class KeywordJournalAnalyzer:
         detected_signals = self._detect_signals(content=content)
 
         signal_codes = [
-            signal.signal_code
-            for signal in detected_signals
-        ]
+        signal.signal_code
+        for signal in detected_signals
+     ]
 
         themes = self._build_themes(signal_codes=signal_codes)
 
         life_event_candidates = self._detect_life_event_candidates(
-            content=content,
+        content=content,
         )
 
         safety_flags = self._detect_safety_flags(content=content)
 
+        emotional_tone = ", ".join(themes) if themes else None
+
+        summary = self._build_summary(
+        themes=themes,
+        life_event_candidates=life_event_candidates,
+    )
+
+        semantic_frame = build_semantic_frame_from_legacy_analysis(
+        detected_signals=detected_signals,
+        safety_flags=safety_flags,
+        themes=themes,
+        life_event_candidates=life_event_candidates,
+        emotional_tone=emotional_tone,
+        provider=self.provider,
+        model_name=self.model_name,
+        prompt_version=self.prompt_version,
+    )
+
         return JournalAnalysisResult(
-            detected_signals=detected_signals,
-            safety_flags=safety_flags,
-            themes=themes,
-            life_event_candidates=life_event_candidates,
-            emotional_tone=", ".join(themes) if themes else None,
-            summary=self._build_summary(
-                themes=themes,
-                life_event_candidates=life_event_candidates,
-            ),
-            language="en",
-            provider=self.provider,
-            model_name=self.model_name,
-            prompt_version=self.prompt_version,
-            raw_output={
-                "analyzer_type": "keyword_fallback",
-                "detected_signal_codes": signal_codes,
-                "themes": themes,
-                "safety_flags": safety_flags,
-                "life_event_candidates": [
-                    candidate.model_dump(mode="json")
-                    for candidate in life_event_candidates
-                ],
-            },
-        )
+        detected_signals=detected_signals,
+        safety_flags=safety_flags,
+        themes=themes,
+        life_event_candidates=life_event_candidates,
+        emotional_tone=emotional_tone,
+        summary=summary,
+        language="en",
+        provider=self.provider,
+        model_name=self.model_name,
+        prompt_version=self.prompt_version,
+        raw_output={
+            "analyzer_type": "keyword_fallback",
+            "detected_signal_codes": signal_codes,
+            "detected_signals": [
+                signal.model_dump(mode="json")
+                for signal in detected_signals
+            ],
+            "themes": themes,
+            "safety_flags": safety_flags,
+            "life_event_candidates": [
+                candidate.model_dump(mode="json")
+                for candidate in life_event_candidates
+            ],
+        },
+        semantic_frame=semantic_frame,
+    )
 
     def _detect_signals(self, content: str) -> list[DetectedJournalSignal]:
         detected_signals: list[DetectedJournalSignal] = []

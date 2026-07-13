@@ -15,7 +15,7 @@ from app.ai.journal_analyzer import (
 )
 from app.ai.providers.keyword_journal_analyzer import KeywordJournalAnalyzer
 from app.core.config import settings
-
+from app.ai.semantic_frame_builder import build_semantic_frame_from_legacy_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -288,6 +288,16 @@ class NvidiaJournalAnalyzer:
             life_event_candidates = self._filter_life_event_candidates(
                 parsed_payload.life_event_candidates
             )
+            semantic_frame = build_semantic_frame_from_legacy_analysis(
+                detected_signals=detected_signals,
+                safety_flags=safety_flags,
+                themes=themes,
+                life_event_candidates=life_event_candidates,
+                emotional_tone=emotional_tone,
+                provider=self.provider,
+                model_name=self.model_name,
+                prompt_version=self.prompt_version,
+            )
 
             self._debug_log(
                 "NVIDIA extraction succeeded",
@@ -319,6 +329,7 @@ class NvidiaJournalAnalyzer:
                     "llm_payload": parsed_payload.model_dump(mode="json"),
                     "safety_flags_after_keyword_merge": safety_flags,
                 },
+                semantic_frame=semantic_frame,
             )
 
         except Exception as exc:
