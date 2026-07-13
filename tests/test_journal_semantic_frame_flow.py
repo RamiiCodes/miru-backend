@@ -1,3 +1,6 @@
+from app.services.semantic_frame_normalizer import CORE_DIMENSION_NAMES
+
+
 def _auth_headers(
     client,
     email: str = "semantic-frame@example.com",
@@ -62,6 +65,14 @@ def test_journal_creates_semantic_frame_from_keyword_analysis(client):
     assert semantic_frame["raw_output_json"]["source"] == (
         "legacy_analyzer_compatibility_bridge"
     )
+
+    assert set(semantic_frame["core_dimensions_json"].keys()) == set(
+        CORE_DIMENSION_NAMES
+    )
+
+    assert semantic_frame["core_dimensions_json"]["valence"] is None
+    assert semantic_frame["core_dimensions_json"]["arousal"] is None
+    
 
 
 def test_get_single_journal_semantic_frame(client):
