@@ -1,5 +1,6 @@
 import uuid
 
+from app.db.models.action_template import ActionTemplate
 from app.db.models.daily_reflection import DailyReflection
 from app.db.repositories.action_suggestion_repository import create_action_suggestion
 from app.db.repositories.user_repository import get_user_by_email
@@ -91,9 +92,29 @@ def _create_life_event(client, headers: dict[str, str]) -> dict:
     return response.json()
 
 
-def test_generate_daily_reflection_from_existing_state_insights_and_actions(client):
+def _seed_daily_reflection_action_template(db_session) -> None:
+    template = ActionTemplate(
+        code="test_daily_short_stress_pause",
+        title="Take a short stress pause",
+        content="Pause briefly and notice body tension.",
+        action_type="grounding",
+        base_priority=8,
+        base_confidence=0.7,
+        minimum_score=0,
+        is_active=True,
+    )
+
+    db_session.add(template)
+    db_session.commit()
+
+
+def test_generate_daily_reflection_from_existing_state_insights_and_actions(
+    client,
+    db_session,
+):
     headers = _auth_headers(client)
 
+    _seed_daily_reflection_action_template(db_session)
     _create_checkin(client, headers)
     _create_journal(client, headers)
 

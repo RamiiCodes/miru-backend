@@ -1,3 +1,6 @@
+from app.db.models.action_template import ActionTemplate
+
+
 def _auth_headers(client, email: str = "reflection-response@example.com") -> dict[str, str]:
     response = client.post(
         "/auth/register",
@@ -74,6 +77,22 @@ def _create_context(client, headers: dict[str, str]) -> None:
     assert actions_response.status_code == 200
 
 
+def _seed_reflection_action_template(db_session) -> None:
+    template = ActionTemplate(
+        code="test_reflection_short_stress_pause",
+        title="Take a short stress pause",
+        content="Pause briefly and notice body tension.",
+        action_type="grounding",
+        base_priority=8,
+        base_confidence=0.7,
+        minimum_score=0,
+        is_active=True,
+    )
+
+    db_session.add(template)
+    db_session.commit()
+
+
 def _create_life_event(client, headers: dict[str, str]) -> dict:
     response = client.post(
         "/life-events",
@@ -94,9 +113,10 @@ def _create_life_event(client, headers: dict[str, str]) -> dict:
     return response.json()
 
 
-def test_generate_reflection_response_from_current_context(client):
+def test_generate_reflection_response_from_current_context(client, db_session):
     headers = _auth_headers(client)
 
+    _seed_reflection_action_template(db_session)
     _create_profile(client, headers, style="direct")
     _create_context(client, headers)
 

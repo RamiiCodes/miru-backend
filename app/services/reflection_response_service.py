@@ -12,7 +12,6 @@ from app.helpers.reasoning_input_assembler import (
     ReasoningInputs,
     assemble_reasoning_inputs,
 )
-from app.helpers.coping_style_action_ranker import rank_actions_by_coping_style
 
 PRIORITY_ORDER = {
     "high": 3,
@@ -94,7 +93,6 @@ def _select_tone(reasoning_inputs: ReasoningInputs) -> str:
 
 def _select_top_action(
     actions: list[ActionSuggestion],
-    coping_style,
 ) -> ActionSuggestion | None:
     active_actions = [
         action
@@ -105,9 +103,13 @@ def _select_top_action(
     if not active_actions:
         return None
 
-    ranked_actions = rank_actions_by_coping_style(
-        actions=active_actions,
-        coping_style=coping_style,
+    ranked_actions = sorted(
+        active_actions,
+        key=lambda action: (
+            PRIORITY_ORDER.get(action.priority, 0),
+            action.created_at,
+        ),
+        reverse=True,
     )
 
     return ranked_actions[0]
@@ -375,9 +377,8 @@ def generate_reflection_response_for_user(
     latest_insights = reasoning_inputs.latest_insights
     latest_patterns = reasoning_inputs.latest_patterns
     top_action = _select_top_action(
-    actions=reasoning_inputs.active_actions,
-    coping_style=reasoning_inputs.coping_style,
-)
+        actions=reasoning_inputs.active_actions,
+    )
 
     insight_titles = [insight.title for insight in latest_insights]
     pattern_titles = [pattern.title for pattern in latest_patterns]

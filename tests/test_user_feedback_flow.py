@@ -16,6 +16,15 @@ def _auth_headers(client, email: str = "feedback@example.com") -> dict[str, str]
     }
 
 
+def _calculate_state(client, headers: dict[str, str]) -> None:
+    response = client.post(
+        "/state/calculate",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+
 def _create_action(client, headers: dict[str, str]) -> dict:
     checkin_response = client.post(
         "/checkins",
@@ -30,6 +39,8 @@ def _create_action(client, headers: dict[str, str]) -> dict:
     )
 
     assert checkin_response.status_code == 201
+
+    _calculate_state(client, headers)
 
     actions_response = client.post(
         "/actions/generate",

@@ -7,7 +7,6 @@ from app.db.models.daily_reflection import DailyReflection
 from app.db.models.user_context import UserContext
 from app.db.repositories.daily_reflection_repository import upsert_daily_reflection
 from app.helpers.reasoning_input_assembler import assemble_reasoning_inputs
-from app.helpers.coping_style_action_ranker import rank_actions_by_coping_style
 
 PRIORITY_ORDER = {
     "high": 3,
@@ -148,9 +147,13 @@ def generate_daily_reflection_for_user(
     latest_patterns = reasoning_inputs.latest_patterns
     actions = reasoning_inputs.active_actions
 
-    sorted_actions = rank_actions_by_coping_style(
-    actions=actions,
-    coping_style=reasoning_inputs.coping_style,
+    sorted_actions = sorted(
+        actions,
+        key=lambda action: (
+            PRIORITY_ORDER.get(action.priority, 0),
+            action.created_at,
+        ),
+        reverse=True,
     )
 
     top_actions = _deduplicate_actions_by_code(sorted_actions)[:3]
