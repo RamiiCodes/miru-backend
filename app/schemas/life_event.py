@@ -66,6 +66,13 @@ class LifeEventRead(BaseModel):
     source_type: str
     source_id: UUID | None
 
+    source_semantic_frame_id: UUID | None
+
+    significance: float | None
+    valence: float | None
+    semantic_tags_json: list
+    life_domains_json: list
+
     category: str
     event_type: str
     title: str
@@ -77,6 +84,10 @@ class LifeEventRead(BaseModel):
 
     confirmation_status: str
     confidence: float | None
+    significance: float | None
+    valence: float | None
+    semantic_tags_json: list
+    life_domains_json: list
     evidence: str | None
 
     is_active: bool

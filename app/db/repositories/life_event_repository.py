@@ -21,6 +21,11 @@ def create_life_event(
     confirmation_status: str,
     confidence: float | None,
     evidence: str | None,
+    source_semantic_frame_id: UUID | None = None,
+    significance: float | None = None,
+    valence: float | None = None,
+    semantic_tags_json: list | None = None,
+    life_domains_json: list | None = None,
 ) -> LifeEvent:
     life_event = LifeEvent(
         user_id=user_id,
@@ -36,6 +41,11 @@ def create_life_event(
         confirmation_status=confirmation_status,
         confidence=confidence,
         evidence=evidence,
+        source_semantic_frame_id=source_semantic_frame_id,
+        significance=significance,
+        valence=valence,
+        semantic_tags_json=semantic_tags_json or [],
+        life_domains_json=life_domains_json or [],
     )
 
     db.add(life_event)
