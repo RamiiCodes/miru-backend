@@ -25,6 +25,21 @@ def get_action_suggestion_by_source(
     )
 
 
+def get_active_action_suggestion_by_code(
+    db: Session,
+    user_id: UUID,
+    action_code: str,
+) -> ActionSuggestion | None:
+    return (
+        db.query(ActionSuggestion)
+        .filter(ActionSuggestion.user_id == user_id)
+        .filter(ActionSuggestion.action_code == action_code)
+        .filter(ActionSuggestion.is_completed.is_(False))
+        .filter(ActionSuggestion.is_dismissed.is_(False))
+        .first()
+    )
+
+
 def create_action_suggestion(
     db: Session,
     user_id: UUID,

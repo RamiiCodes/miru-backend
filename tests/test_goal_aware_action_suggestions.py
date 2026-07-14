@@ -1,11 +1,6 @@
-STRESS_MANAGEMENT_RELATED_ACTION_CODES = [
-    "short_stress_pause",
-    "reduce_scope_today",
-    "post_work_decompression_note",
-    "name_the_looping_thought",
-    "choose_one_small_next_step",
-    "work_trigger_note",
-]
+STRESS_MANAGEMENT_TEMPLATE_CODE = "test_goal_stress_support"
+
+
 def _calculate_state(client, headers: dict[str, str]) -> None:
     response = client.post(
         "/state/calculate",
@@ -88,7 +83,7 @@ def _create_high_stress_checkin(client, headers: dict[str, str]) -> None:
     assert response.status_code == 201
 
 
-def test_active_goal_boosts_matching_action_suggestions(client):
+def test_active_goal_matches_action_template_suggestions(client):
     headers = _auth_headers(client)
 
     _create_goal(
@@ -120,20 +115,17 @@ def test_active_goal_boosts_matching_action_suggestions(client):
     assert response.status_code == 200
 
     actions = response.json()
-
-    matching_actions = [
-        action
+    actions_by_code = {
+        action["action_code"]: action
         for action in actions
-        if action["action_code"] in STRESS_MANAGEMENT_RELATED_ACTION_CODES
-    ]
+    }
 
-    assert matching_actions
-
-    assert any(
-        action["priority"] == "high"
-        and action["confidence"] >= 0.82
-        for action in matching_actions
-    )
+    assert STRESS_MANAGEMENT_TEMPLATE_CODE in actions_by_code
+    assert actions_by_code[STRESS_MANAGEMENT_TEMPLATE_CODE][
+        "source_type"
+    ] == "action_template"
+    assert actions_by_code[STRESS_MANAGEMENT_TEMPLATE_CODE]["priority"] == "high"
+    assert actions_by_code[STRESS_MANAGEMENT_TEMPLATE_CODE]["confidence"] >= 0.79
 
 
 def test_paused_goal_does_not_break_action_generation(client):
@@ -172,4 +164,7 @@ def test_paused_goal_does_not_break_action_generation(client):
     )
 
     assert response.status_code == 200
-    assert isinstance(response.json(), list)
+    assert STRESS_MANAGEMENT_TEMPLATE_CODE not in {
+        action["action_code"]
+        for action in response.json()
+    }

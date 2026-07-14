@@ -49,6 +49,16 @@ def create_journal_semantic_frame(
 
     return semantic_frame
 
+def get_latest_journal_semantic_frame_for_user(
+    db: Session,
+    user_id: UUID,
+) -> JournalSemanticFrame | None:
+    return (
+        db.query(JournalSemanticFrame)
+        .filter(JournalSemanticFrame.user_id == user_id)
+        .order_by(JournalSemanticFrame.created_at.desc())
+        .first()
+    )
 
 def get_journal_semantic_frame_by_user_id_and_id(
     db: Session,

@@ -20,6 +20,7 @@ from app.db.models.journal_extracted_signal import JournalExtractedSignal
 from app.db.models.life_event import LifeEvent
 from app.db.models.user_goal import UserGoal
 from app.db.models.journal_semantic_frame import JournalSemanticFrame
+from app.db.models.action_template import ActionTemplate
 
 __all__ = [
     "User",
@@ -44,4 +45,5 @@ __all__ = [
     "LifeEvent",
     "UserGoal",
     "JournalSemanticFrame",
+    "ActionTemplate",
 ]

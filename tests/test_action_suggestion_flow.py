@@ -1,6 +1,4 @@
-from datetime import datetime, timedelta, timezone
-
-from app.db.repositories.pattern_detection_repository import create_pattern_detection
+from app.db.models.action_template import ActionTemplate
 from app.db.repositories.user_repository import get_user_by_email
 
 
@@ -22,40 +20,43 @@ def _auth_headers(client, email: str) -> dict[str, str]:
     }
 
 
-def _seed_pattern_detection(
+def _seed_action_template(
     db_session,
     *,
-    user_id,
-    pattern_code: str,
-    severity: str = "medium",
-):
-    today = datetime.now(timezone.utc).date()
-
-    return create_pattern_detection(
-        db=db_session,
-        user_id=user_id,
-        pattern_code=pattern_code,
-        title=f"Test {pattern_code}",
-        description=f"Test source pattern for {pattern_code}.",
-        pattern_type="test_pattern",
-        severity=severity,
-        confidence=0.7,
-        evidence_json={
-            "matching_days": [
-                {
-                    "date": (today - timedelta(days=1)).isoformat(),
-                    "signals": {},
-                },
-                {
-                    "date": today.isoformat(),
-                    "signals": {},
-                },
-            ],
-        },
-        window_start_date=today - timedelta(days=1),
-        window_end_date=today,
-        detection_window_days=2,
+    code: str,
+    title: str,
+    base_priority: int = 6,
+) -> ActionTemplate:
+    template = ActionTemplate(
+        code=code,
+        title=title,
+        content=f"Test content for {title}.",
+        action_type="reflection",
+        base_priority=base_priority,
+        base_confidence=0.7,
+        minimum_score=0,
+        is_active=True,
     )
+
+    db_session.add(template)
+    db_session.commit()
+    db_session.refresh(template)
+
+    return template
+
+
+def test_action_suggestion_generation_returns_empty_without_active_templates(
+    client,
+):
+    headers = _auth_headers(client, "actions-no-templates@example.com")
+
+    response = client.post(
+        "/action-suggestions/generate",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
 
 
 def test_action_suggestion_generation_user_isolation_complete_and_dismiss(
@@ -67,20 +68,17 @@ def test_action_suggestion_generation_user_isolation_complete_and_dismiss(
     user_a = get_user_by_email(db=db_session, email="actions-a@example.com")
     user_b = get_user_by_email(db=db_session, email="actions-b@example.com")
 
-    _seed_pattern_detection(
+    _seed_action_template(
         db_session,
-        user_id=user_a.id,
-        pattern_code="repeated_work_stress",
+        code="test_post_work_decompression_note",
+        title="Try a short post-work decompression note",
+        base_priority=8,
     )
-    _seed_pattern_detection(
+    _seed_action_template(
         db_session,
-        user_id=user_a.id,
-        pattern_code="repeated_rumination",
-    )
-    _seed_pattern_detection(
-        db_session,
-        user_id=user_b.id,
-        pattern_code="repeated_self_criticism",
+        code="test_name_the_looping_thought",
+        title="Name the looping thought",
+        base_priority=5,
     )
 
     user_a_generate_response = client.post(
@@ -105,16 +103,14 @@ def test_action_suggestion_generation_user_isolation_complete_and_dismiss(
     }
 
     assert set(user_a_actions_by_code) == {
-        "post_work_decompression_note",
-        "name_the_looping_thought",
+        "test_post_work_decompression_note",
+        "test_name_the_looping_thought",
     }
-    assert set(user_b_actions_by_code) == {
-        "balanced_self_response",
-    }
+    assert set(user_b_actions_by_code) == set(user_a_actions_by_code)
 
     for action in user_a_actions_by_code.values():
         assert action["user_id"] == str(user_a.id)
-        assert action["source_type"] == "pattern_detection"
+        assert action["source_type"] == "action_template"
         assert action["is_completed"] is False
         assert action["is_dismissed"] is False
 
@@ -124,7 +120,7 @@ def test_action_suggestion_generation_user_isolation_complete_and_dismiss(
     user_b_cannot_complete_user_a_response = client.patch(
         (
             "/action-suggestions/"
-            f"{user_a_actions_by_code['post_work_decompression_note']['id']}"
+            f"{user_a_actions_by_code['test_post_work_decompression_note']['id']}"
             "/complete"
         ),
         headers=user_b_headers,
@@ -156,7 +152,7 @@ def test_action_suggestion_generation_user_isolation_complete_and_dismiss(
     complete_response = client.patch(
         (
             "/action-suggestions/"
-            f"{user_a_actions_by_code['post_work_decompression_note']['id']}"
+            f"{user_a_actions_by_code['test_post_work_decompression_note']['id']}"
             "/complete"
         ),
         headers=user_a_headers,
@@ -164,7 +160,7 @@ def test_action_suggestion_generation_user_isolation_complete_and_dismiss(
     dismiss_response = client.patch(
         (
             "/action-suggestions/"
-            f"{user_a_actions_by_code['name_the_looping_thought']['id']}"
+            f"{user_a_actions_by_code['test_name_the_looping_thought']['id']}"
             "/dismiss"
         ),
         headers=user_a_headers,
@@ -205,9 +201,9 @@ def test_action_suggestion_generation_user_isolation_complete_and_dismiss(
     }
 
     assert set(all_user_a_actions_by_code) == set(user_a_actions_by_code)
-    assert all_user_a_actions_by_code["post_work_decompression_note"][
+    assert all_user_a_actions_by_code["test_post_work_decompression_note"][
         "is_completed"
     ] is True
-    assert all_user_a_actions_by_code["name_the_looping_thought"][
+    assert all_user_a_actions_by_code["test_name_the_looping_thought"][
         "is_dismissed"
     ] is True

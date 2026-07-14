@@ -16,6 +16,7 @@ os.environ["JOURNAL_ANALYZER_PROVIDER"] = "keyword"
 
 from app.db import models  # noqa: E402, F401
 from app.db.base import Base  # noqa: E402
+from app.db.models.action_template import ActionTemplate  # noqa: E402
 from app.db.models.signal_catalog import SignalCatalog  # noqa: E402
 from app.db.session import get_db  # noqa: E402
 from app.main import app  # noqa: E402
@@ -160,6 +161,78 @@ TEST_SIGNAL_CATALOG = [
 ]
 
 
+TEST_ACTION_TEMPLATES = [
+    {
+        "code": "short_stress_pause",
+        "title": "Take a short pause",
+        "content": "Step away briefly and let your attention settle.",
+        "action_type": "regulation",
+        "match_semantic_tags_json": [
+            "high_pressure",
+            "overwhelmed",
+        ],
+        "match_needs_json": [
+            "grounding",
+            "rest",
+        ],
+        "match_life_domains_json": [],
+        "match_goal_categories_json": [
+            "stress_management",
+        ],
+        "match_coping_styles_json": [
+            "breathing",
+        ],
+        "conditions_json": [
+            {
+                "source": "state",
+                "dimension": "stress_level",
+                "operator": "gte",
+                "threshold": 0.6,
+                "weight": 1.5,
+            }
+        ],
+        "base_priority": 6,
+        "base_confidence": 0.55,
+        "minimum_score": 1.0,
+    },
+    {
+        "code": "post_work_decompression_note",
+        "title": "Try a short post-work decompression note",
+        "content": "Write briefly about what is still looping after work.",
+        "action_type": "reflection",
+        "match_semantic_tags_json": [],
+        "match_needs_json": [],
+        "match_life_domains_json": [],
+        "match_goal_categories_json": [],
+        "match_coping_styles_json": [
+            "writing",
+            "reflection",
+        ],
+        "conditions_json": [],
+        "base_priority": 8,
+        "base_confidence": 0.72,
+        "minimum_score": 1.0,
+    },
+    {
+        "code": "test_goal_stress_support",
+        "title": "Choose one small stress support step",
+        "content": "Pick one small next step that supports stress management today.",
+        "action_type": "planning",
+        "match_semantic_tags_json": [],
+        "match_needs_json": [],
+        "match_life_domains_json": [],
+        "match_goal_categories_json": [
+            "stress_management",
+        ],
+        "match_coping_styles_json": [],
+        "conditions_json": [],
+        "base_priority": 8,
+        "base_confidence": 0.78,
+        "minimum_score": 1.0,
+    },
+]
+
+
 def seed_signal_catalog(db):
     for signal_data in TEST_SIGNAL_CATALOG:
         signal = SignalCatalog(
@@ -174,6 +247,14 @@ def seed_signal_catalog(db):
     db.commit()
 
 
+def seed_action_templates(db):
+    for template_data in TEST_ACTION_TEMPLATES:
+        template = ActionTemplate(**template_data)
+        db.add(template)
+
+    db.commit()
+
+
 @pytest.fixture()
 def db_session():
     Base.metadata.drop_all(bind=engine)
@@ -183,6 +264,7 @@ def db_session():
 
     try:
         seed_signal_catalog(db)
+        seed_action_templates(db)
         yield db
     finally:
         db.close()
