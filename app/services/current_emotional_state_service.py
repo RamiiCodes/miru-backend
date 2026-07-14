@@ -6,9 +6,13 @@ from sqlalchemy.orm import Session
 from app.db.models.current_emotional_state import CurrentEmotionalState
 from app.db.models.signal_catalog import SignalCatalog
 from app.db.models.user_signal import UserSignal
+from app.helpers.semantic_state_mapper import (
+    calculate_semantic_state_estimates,
+    get_semantic_estimate_confidence,
+    get_semantic_estimate_value,
+)
 
-
-MODEL_VERSION = "current_emotional_state_v0_3"
+MODEL_VERSION = "current_emotional_state_v0_4"
 
 
 def _clamp(value: float | None) -> float | None:
@@ -52,15 +56,17 @@ def _load_latest_signal_values(
         .all()
     )
 
-    latest_signals: dict[str, dict[str, float]] = {}
+    latest_signals: dict[str, dict] = {}
 
-    for code, value, confidence, _recorded_at in rows:
+    for code, value, confidence, recorded_at in rows:
         if code in latest_signals:
             continue
 
         latest_signals[code] = {
+            "code": code,
             "value": value,
             "confidence": confidence,
+            "recorded_at": recorded_at,
         }
 
     return latest_signals
@@ -90,7 +96,7 @@ def _signal_confidence(
     return signal["confidence"]
 
 
-def _has_meaningful_signal(value: float | None, threshold: float = 0.5) -> bool:
+def _has_meaningful_signal(value: float | None, threshold: float = 0.4) -> bool:
     return value is not None and value >= threshold
 
 
@@ -143,6 +149,9 @@ def calculate_current_emotional_state(
     latest_signals = _load_latest_signal_values(
         db=db,
         user_id=user_id,
+    )
+    semantic_state_estimates = calculate_semantic_state_estimates(
+        user_signals=list(latest_signals.values()),
     )
 
     mood_level = _signal_value(latest_signals, "mood_level")
@@ -254,6 +263,48 @@ def calculate_current_emotional_state(
     if self_criticism is not None:
         self_esteem = 1 - self_criticism
 
+    semantic_stress_level = get_semantic_estimate_value(
+        semantic_state_estimates,
+        "stress_level",
+    )
+    if semantic_stress_level is not None:
+        stress_level = semantic_stress_level
+
+    semantic_energy_level = get_semantic_estimate_value(
+        semantic_state_estimates,
+        "energy_level",
+    )
+    if semantic_energy_level is not None:
+        energy_level = semantic_energy_level
+
+    semantic_social_connection = get_semantic_estimate_value(
+        semantic_state_estimates,
+        "social_connection",
+    )
+    if semantic_social_connection is not None:
+        social_connection = semantic_social_connection
+
+    semantic_emotional_stability = get_semantic_estimate_value(
+        semantic_state_estimates,
+        "emotional_stability",
+    )
+    if semantic_emotional_stability is not None:
+        emotional_stability = semantic_emotional_stability
+
+    semantic_motivation = get_semantic_estimate_value(
+        semantic_state_estimates,
+        "motivation",
+    )
+    if semantic_motivation is not None:
+        motivation = semantic_motivation
+
+    semantic_self_esteem = get_semantic_estimate_value(
+        semantic_state_estimates,
+        "self_esteem",
+    )
+    if semantic_self_esteem is not None:
+        self_esteem = semantic_self_esteem
+
     current_state = _get_or_create_current_state(
         db=db,
         user_id=user_id,
@@ -270,10 +321,19 @@ def calculate_current_emotional_state(
     current_state.physical_activity = None
     current_state.eating_habits = None
 
-    current_state.confidence = _calculate_confidence(
-        latest_signals=latest_signals,
-        used_signal_codes=used_signal_codes,
+    semantic_state_confidence = get_semantic_estimate_confidence(
+        semantic_state_estimates,
     )
+    state_confidence = (
+        semantic_state_confidence
+        if semantic_state_confidence is not None
+        else _calculate_confidence(
+            latest_signals=latest_signals,
+            used_signal_codes=used_signal_codes,
+        )
+    )
+
+    current_state.confidence = state_confidence
     current_state.model_version = MODEL_VERSION
     current_state.calculated_at = datetime.now(timezone.utc)
 
