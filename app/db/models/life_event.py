@@ -13,11 +13,11 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
-
+from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 class LifeEvent(Base):
     __tablename__ = "life_events"
@@ -84,6 +84,24 @@ class LifeEvent(Base):
             "source_id",
             "event_type",
             name="uq_life_events_source_event_type",
+        ),
+        CheckConstraint(
+        "significance IS NULL OR (significance >= 0 AND significance <= 1)",
+        name="ck_life_events_significance_range",
+        ),
+        CheckConstraint(
+        "valence IS NULL OR (valence >= 0 AND valence <= 1)",
+        name="ck_life_events_valence_range",
+        ),
+        Index(
+        "ix_life_events_semantic_tags_gin",
+        "semantic_tags_json",
+        postgresql_using="gin",
+        ),
+        Index(
+        "ix_life_events_life_domains_gin",
+        "life_domains_json",
+        postgresql_using="gin",
         ),
         Index("ix_life_events_user_event_date", "user_id", "event_date"),
         Index("ix_life_events_user_category", "user_id", "category"),
@@ -208,4 +226,32 @@ class LifeEvent(Base):
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
+    )
+    source_semantic_frame_id: Mapped[uuid.UUID | None] = mapped_column(
+    UUID(as_uuid=True),
+    ForeignKey("journal_semantic_frames.id", ondelete="SET NULL"),
+    nullable=True,
+    index=True,
+    )
+
+    significance: Mapped[float | None] = mapped_column(
+    nullable=True,
+    )
+
+    valence: Mapped[float | None] = mapped_column(
+    nullable=True,
+    )
+
+    semantic_tags_json: Mapped[list] = mapped_column(
+    JSONB,
+    nullable=False,
+    default=list,
+    server_default=text("'[]'::jsonb"),
+    )
+
+    life_domains_json: Mapped[list] = mapped_column(
+    JSONB,
+    nullable=False,
+    default=list,
+    server_default=text("'[]'::jsonb"),
     )

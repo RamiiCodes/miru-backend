@@ -3,7 +3,7 @@ from time import perf_counter
 
 from sqlalchemy.orm import Session
 
-from app import db
+
 from app.ai.journal_analyzer_factory import get_journal_analyzer
 from app.db.models.journal_entry import JournalEntry
 from app.db.models.llm_run import LLMRun
@@ -219,7 +219,8 @@ def create_user_signals_from_journal(
     user_id=journal_entry.user_id,
     journal_analysis_id=journal_analysis.id,
     life_event_candidates=life_event_candidates_json,
-    )
+    semantic_frame=semantic_frame,
+)
 
     _create_llm_run(
         db=db,
