@@ -3,6 +3,7 @@ from time import perf_counter
 
 from sqlalchemy.orm import Session
 
+from app import db
 from app.ai.journal_analyzer_factory import get_journal_analyzer
 from app.db.models.journal_entry import JournalEntry
 from app.db.models.llm_run import LLMRun
@@ -16,6 +17,9 @@ from app.services.safety_event_service import create_safety_events_from_flags
 from app.services.life_event_service import create_life_events_from_journal_analysis
 from app.services.journal_semantic_frame_service import (
     create_semantic_frame_from_analysis_result,
+)
+from app.services.semantic_signal_bridge_service import (
+    create_user_signals_from_semantic_frame,
 )
 
 def _to_json_safe_dict(value) -> dict:
@@ -197,12 +201,17 @@ def create_user_signals_from_journal(
         latency_ms=latency_ms,
     )
     
-    create_semantic_frame_from_analysis_result(
+    semantic_frame = create_semantic_frame_from_analysis_result(
     db=db,
     user_id=journal_entry.user_id,
     journal_entry_id=journal_entry.id,
     journal_analysis_id=journal_analysis.id,
     analysis_result=analysis_result,
+)
+
+    create_user_signals_from_semantic_frame(
+    db=db,
+    semantic_frame=semantic_frame,
     )
 
     create_life_events_from_journal_analysis(

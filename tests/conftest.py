@@ -32,6 +32,62 @@ TestingSessionLocal = sessionmaker(
 
 TEST_SIGNAL_CATALOG = [
     {
+    "code": "semantic_valence",
+    "name": "Semantic Valence",
+    "domain": "semantic",
+    "description": "Generic semantic dimension: negative to positive emotional tone.",
+    "is_active": True,
+    },
+    {
+    "code": "semantic_arousal",
+    "name": "Semantic Arousal",
+    "domain": "semantic",
+    "description": "Generic semantic dimension: calm/deactivated to activated/intense.",
+    "is_active": True,
+    },
+    {
+    "code": "semantic_threat",
+    "name": "Semantic Threat",
+    "domain": "semantic",
+    "description": "Generic semantic dimension: felt danger, pressure, alarm, or risk.",
+    "is_active": True,
+    },
+    {
+    "code": "semantic_control",
+    "name": "Semantic Control",
+    "domain": "semantic",
+    "description": "Generic semantic dimension: sense of agency and ability to act.",
+    "is_active": True,
+    },
+    {
+    "code": "semantic_social_connection",
+    "name": "Semantic Social Connection",
+    "domain": "semantic",
+    "description": "Generic semantic dimension: isolation/rejection to connection/support.",
+    "is_active": True,
+    },
+    {
+    "code": "semantic_uncertainty",
+    "name": "Semantic Uncertainty",
+    "domain": "semantic",
+    "description": "Generic semantic dimension: clarity/certainty to uncertainty/confusion.",
+    "is_active": True,
+    },
+    {
+    "code": "semantic_self_evaluation",
+    "name": "Semantic Self Evaluation",
+    "domain": "semantic",
+    "description": "Generic semantic dimension: self-criticism/shame to self-acceptance/pride.",
+    "is_active": True,
+    },
+    {
+    "code": "semantic_energy",
+    "name": "Semantic Energy",
+    "domain": "semantic",
+    "description": "Generic semantic dimension: depleted to energized.",
+    "is_active": True,
+    },
+    {
         "code": "mood_level",
         "name": "Mood Level",
         "domain": "emotional_state",
@@ -75,6 +131,31 @@ TEST_SIGNAL_CATALOG = [
         "code": "work_sensitivity",
         "name": "Work Sensitivity",
         "domain": "contextual_pattern",
+    },
+    {
+        "code": "grief_loss",
+        "name": "Grief and Loss",
+        "domain": "emotional_state",
+    },
+    {
+        "code": "emotional_numbness",
+        "name": "Emotional Numbness",
+        "domain": "emotional_state",
+    },
+    {
+        "code": "disorientation",
+        "name": "Disorientation",
+        "domain": "cognitive_pattern",
+    },
+    {
+        "code": "loneliness",
+        "name": "Loneliness",
+        "domain": "social_state",
+    },
+    {
+        "code": "overwhelm",
+        "name": "Overwhelm",
+        "domain": "emotional_state",
     },
 ]
 
